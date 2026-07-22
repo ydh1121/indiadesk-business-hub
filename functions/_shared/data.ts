@@ -4,7 +4,7 @@ import { nowIso } from './request';
 
 export const ACCOUNT_HEADERS=['username','role','display_name','password_salt','password_hash','password_iterations','status','device_policy','pc_limit','mobile_limit','created_at','updated_at'];
 export type Account={row:number;username:string;role:'admin'|'guest';displayName:string;salt:string;hash:string;iterations:number;status:string;devicePolicy:string;pcLimit:number;mobileLimit:number;createdAt:string;updatedAt:string};
-export async function accounts(env:Env){ const rows=await getRange(env,'Accounts!A2:L1000'); return rows.filter(r=>r[0]).map((r,i):Account=>({row:i+2,username:r[0],role:r[1]==='admin'?'admin':'guest',displayName:r[2]||r[0],salt:r[3]||'',hash:r[4]||'',iterations:Number(r[5]||120000),status:r[6]||'pending',devicePolicy:r[7]||'BLOCK',pcLimit:Number(r[8]||1),mobileLimit:Number(r[9]||1),createdAt:r[10]||'',updatedAt:r[11]||''})); }
+export async function accounts(env:Env){ const rows=await getRange(env,'Accounts!A2:L1000'); return rows.filter(r=>r[0]).map((r,i):Account=>({row:i+2,username:r[0],role:r[1]==='admin'?'admin':'guest',displayName:r[2]||r[0],salt:r[3]||'',hash:r[4]||'',iterations:Number(r[5]||100000),status:r[6]||'pending',devicePolicy:r[7]||'BLOCK',pcLimit:Number(r[8]||1),mobileLimit:Number(r[9]||1),createdAt:r[10]||'',updatedAt:r[11]||''})); }
 export async function findAccount(env:Env,username:string){ return (await accounts(env)).find(a=>a.username===username); }
 export async function saveAccount(env:Env,a:Account){ await updateRange(env,`Accounts!A${a.row}:L${a.row}`,[[a.username,a.role,a.displayName,a.salt,a.hash,a.iterations,a.status,a.devicePolicy,a.pcLimit,a.mobileLimit,a.createdAt||nowIso(),nowIso()]]); }
 
