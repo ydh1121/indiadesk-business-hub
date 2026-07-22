@@ -1,0 +1,2 @@
+import type { PagesFunction } from '../_shared/types'; import type { Env } from '../_shared/types'; import { auth } from '../_shared/guard'; import { ok } from '../_shared/response';
+export const onRequestGet: PagesFunction<Env>=async(c)=>{const a=await auth(c);if(a.error)return a.error;return ok({user:{username:a.session!.sub,role:a.session!.role,displayName:a.session!.displayName},csrf:a.session!.csrf});};
