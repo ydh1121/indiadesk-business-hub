@@ -12,7 +12,7 @@ export async function hmac(value: string, secret: string) {
   return b64url(new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(value))));
 }
 export async function constantEqual(a:string,b:string){ const aa=encoder.encode(a),bb=encoder.encode(b); if(aa.length!==bb.length)return false; let diff=0; for(let i=0;i<aa.length;i++)diff|=aa[i]^bb[i]; return diff===0; }
-export async function hashPassword(password:string, salt?:string, iterations=120000) {
+export async function hashPassword(password:string, salt?:string, iterations=100000) {
   const saltBytes = salt ? fromB64url(salt) : crypto.getRandomValues(new Uint8Array(16));
   const key = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']);
   const bits = await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt:saltBytes,iterations}, key, 256);
