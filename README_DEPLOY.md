@@ -82,3 +82,5 @@ Cloudflare Pages > Settings > Variables and Secrets에 다음을 등록합니다
 - Admin 계정은 강한 비밀번호를 사용하고 공유하지 않습니다.
 - 서비스 계정 키와 세션 Secret은 저장소에 넣지 않고 Cloudflare Secret으로만 관리합니다.
 - 민감도가 더 높아지면 PDF/DOCX 원본은 Cloudflare R2 비공개 버킷으로 이전하고 짧은 만료시간의 서명 URL을 적용합니다.
+
+Deployment trigger: PBKDF2 Cloudflare compatibility fix
