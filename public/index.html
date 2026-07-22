@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>India Business Partner Hub</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <section id="loginPage" class="login-page">
+    <div class="login-visual">
+      <div>
+        <div class="brand-kicker">Internal Business Workspace</div>
+        <h1>India Business<br>Partner Hub</h1>
+        <p>인도진출 영업 파트너 양성, Indiadesk 멀티피드 플랫폼, 시장검증, IBS 현지실행과 Ctrl Shift Trade 거래구조를 관리하는 관계자 전용 웹입니다.</p>
+      </div>
+      <div class="login-metrics">
+        <div class="login-metric"><strong>20명</strong><span>1기 영업 파트너</span></div>
+        <div class="login-metric"><strong>30일</strong><span>IBS 현지과정</span></div>
+        <div class="login-metric"><strong>2개</strong><span>기본·고급과정</span></div>
+        <div class="login-metric"><strong>1+1</strong><span>게스트 PC·모바일</span></div>
+      </div>
+    </div>
+    <div class="login-panel">
+      <form id="loginForm" class="login-card">
+        <div class="brand-kicker">Authorized Access</div>
+        <h2>관계자 로그인</h2>
+        <p class="muted">최초 등록된 PC 1대와 모바일 1대만 사용할 수 있습니다. Admin 계정은 기기 제한이 적용되지 않습니다.</p>
+        <div class="field"><label for="username">계정</label><input id="username" autocomplete="username" required></div>
+        <div class="field"><label for="password">비밀번호</label><input id="password" type="password" autocomplete="current-password" required></div>
+        <button class="primary wide" type="submit">로그인</button>
+        <div id="loginMessage"></div>
+        <button id="bootstrapOpen" class="bootstrap-link" type="button">관리자 최초 설정</button>
+      </form>
+    </div>
+  </section>
+
+  <div id="app" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="side-brand"><strong>INDIADESK</strong><span>BUSINESS PARTNER HUB</span></div>
+      <nav class="nav-list">
+        <button class="nav-button active" data-view="plans"><span class="nav-icon">▦</span>사업계획서</button>
+        <button class="nav-button" data-view="architecture"><span class="nav-icon">⌘</span>통합 아키텍처</button>
+        <button class="nav-button" data-view="documents"><span class="nav-icon">⇩</span>문서 다운로드</button>
+        <button id="adminNav" class="nav-button hidden" data-view="admin"><span class="nav-icon">⚙</span>관리자</button>
+      </nav>
+      <div class="side-user"><strong id="sideName">-</strong><span id="sideRole">-</span><button id="logoutButton" class="ghost">로그아웃</button></div>
+    </aside>
+    <main class="main">
+      <header class="topbar"><h1 id="viewTitle">사업계획서</h1><div class="small muted" id="sessionInfo"></div></header>
+      <div id="content" class="content"><div class="loading">내용을 불러오는 중입니다.</div></div>
+    </main>
+    <nav class="mobile-nav">
+      <button class="active" data-view="plans">계획서</button>
+      <button data-view="architecture">구조</button>
+      <button data-view="documents">문서</button>
+      <button id="mobileAdminNav" class="hidden" data-view="admin">관리</button>
+    </nav>
+  </div>
+
+  <div id="modalRoot"></div>
+  <div id="toast" class="toast hidden"></div>
+  <script type="module" src="/assets/app.js"></script>
+</body>
+</html>
