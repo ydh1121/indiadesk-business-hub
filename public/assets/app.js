@@ -1,6 +1,22 @@
 import { renderMarkdownSafe, escapeHtml } from './markdown.js';
 
-const state = { me: null, csrf: '', view: 'plans', version: 'v1', contents: [], documents: [], admin: {} };
+const DEFAULT_PLAN_TABS = [
+  { pageKey: 'v1', label: 'Version 1 · 기본사업' },
+  { pageKey: 'v2', label: 'Version 2 · 통합사업' },
+  { pageKey: 'v3', label: 'Version 3 · 실행 오더 데스크' },
+];
+
+const state = {
+  me: null,
+  csrf: '',
+  view: 'plans',
+  version: 'v1',
+  contents: [],
+  documents: [],
+  settings: {},
+  settingsLoaded: false,
+  admin: {},
+};
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
@@ -53,6 +69,46 @@ function hero() {
 
 async function loadContents() { const data = await api('/api/content'); state.contents = data.items || []; }
 async function loadDocuments() { const data = await api('/api/documents'); state.documents = data.items || []; }
+async function loadSettings() {
+  const data = await api('/api/settings');
+  state.settings = data.settings || {};
+  state.settingsLoaded = true;
+}
+
+function fallbackPlanLabel(pageKey) {
+  const known = DEFAULT_PLAN_TABS.find((tab) => tab.pageKey === pageKey);
+  return known?.label || pageKey.toUpperCase();
+}
+
+function getPlanTabs() {
+  const availableKeys = [...new Set(state.contents.map((item) => item.pageKey).filter(Boolean))];
+  const availableSet = new Set(availableKeys);
+  const tabs = [];
+  const used = new Set();
+
+  const addTab = (pageKey, label) => {
+    if (!pageKey || !availableSet.has(pageKey) || used.has(pageKey)) return;
+    tabs.push({ pageKey, label: label || fallbackPlanLabel(pageKey) });
+    used.add(pageKey);
+  };
+
+  const raw = state.settings.business_plan_tabs;
+  if (raw) {
+    try {
+      const configured = JSON.parse(raw);
+      if (Array.isArray(configured)) {
+        configured.forEach((tab) => addTab(tab.page_key || tab.pageKey, tab.label));
+      }
+    } catch (error) {
+      console.warn('business_plan_tabs 설정을 읽지 못했습니다.', error);
+    }
+  }
+
+  DEFAULT_PLAN_TABS.forEach((tab) => addTab(tab.pageKey, tab.label));
+  availableKeys.forEach((pageKey) => addTab(pageKey, fallbackPlanLabel(pageKey)));
+
+  return tabs;
+}
 
 function contentCard(item) {
   const edit = state.me.role === 'admin' ? `<button class="ghost edit-btn" data-edit-content="${escapeHtml(item.pageKey)}|${escapeHtml(item.sectionKey)}">내용 수정</button>` : '';
@@ -61,8 +117,34 @@ function contentCard(item) {
 
 async function renderPlans() {
   if (!state.contents.length) await loadContents();
-  const items = state.contents.filter((x) => x.pageKey === state.version).sort((a,b) => a.sortOrder-b.sortOrder);
-  $('#content').innerHTML = `${hero()}<div class="page-toolbar"><div class="tabs"><button class="tab ${state.version==='v1'?'active':''}" data-version="v1">Version 1 · 양성사업</button><button class="tab ${state.version==='v2'?'active':''}" data-version="v2">Version 2 · 통합사업</button></div>${state.me.role==='admin'?'<button id="initializeContent" class="secondary">기본 내용 시트에 초기화</button>':''}</div><div class="section-list">${items.map(contentCard).join('')}</div>`;
+
+  if (!state.settingsLoaded) {
+    try {
+      await loadSettings();
+    } catch (error) {
+      state.settingsLoaded = true;
+      console.warn('설정 API를 불러오지 못해 기본 탭 구성을 사용합니다.', error);
+    }
+  }
+
+  const tabs = getPlanTabs();
+  if (!tabs.some((tab) => tab.pageKey === state.version)) {
+    state.version = tabs[0]?.pageKey || 'v1';
+  }
+
+  const items = state.contents
+    .filter((item) => item.pageKey === state.version)
+    .sort((a, b) => Number(a.sortOrder) - Number(b.sortOrder));
+
+  const tabButtons = tabs
+    .map((tab) => `<button class="tab ${state.version === tab.pageKey ? 'active' : ''}" data-version="${escapeHtml(tab.pageKey)}">${escapeHtml(tab.label)}</button>`)
+    .join('');
+
+  const sections = items.length
+    ? items.map(contentCard).join('')
+    : '<div class="empty-state">이 버전에 등록된 사업계획서 내용이 없습니다.</div>';
+
+  $('#content').innerHTML = `${hero()}<div class="page-toolbar"><div class="tabs">${tabButtons}</div>${state.me.role==='admin'?'<button id="initializeContent" class="secondary">기본 내용 시트에 초기화</button>':''}</div><div class="section-list">${sections}</div>`;
 }
 
 function renderArchitecture() {
