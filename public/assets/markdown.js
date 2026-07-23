@@ -82,6 +82,9 @@ export function renderMarkdownSafe(markdown = '') {
 
   if (!continuesOrderedList && !continuesUnorderedList) {
     closeList();
+    html.push(
+      '<div class="md-spacer" aria-hidden="true">&nbsp;</div>'
+    );
   }
 
   continue;
