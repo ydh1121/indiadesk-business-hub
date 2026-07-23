@@ -1,6 +1,6 @@
 import { renderMarkdownSafe, escapeHtml } from './markdown.js';
 
-const state = { me: null, csrf: '', view: 'plans', version: 'v2', contents: [], documents: [], admin: {} };
+const state = { me: null, csrf: '', view: 'plans', version: 'v1', contents: [], documents: [], admin: {} };
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
