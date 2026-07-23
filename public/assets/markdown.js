@@ -14,69 +14,133 @@ function inline(text) {
   return value;
 }
 
+function isTableRow(line = '') {
+  const v = String(line).trim();
+  return v.startsWith('|') && v.endsWith('|');
+}
+
+function splitTableCells(line = '') {
+  return String(line)
+    .trim()
+    .slice(1, -1)
+    .split('|')
+    .map((cell) => cell.trim());
+}
+
+function isDividerRow(line = '') {
+  if (!isTableRow(line)) return false;
+  const cells = splitTableCells(line);
+  return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+}
+
+function renderTableBlock(blockLines = []) {
+  const compact = blockLines.filter((line) => line.trim());
+  if (!compact.length) return '';
+
+  const header = splitTableCells(compact[0]);
+  let bodyLines = compact.slice(1);
+
+  if (bodyLines.length && isDividerRow(bodyLines[0])) {
+    bodyLines = bodyLines.slice(1);
+  }
+
+  const thead = `<thead><tr>${header.map((cell) => `<th>${inline(cell)}</th>`).join('')}</tr></thead>`;
+  const tbodyRows = bodyLines.map((line) => {
+    const cells = splitTableCells(line);
+    return `<tr>${cells.map((cell) => `<td>${inline(cell)}</td>`).join('')}</tr>`;
+  }).join('');
+
+  return `<div class="md-table-wrap"><table class="md-table">${thead}<tbody>${tbodyRows}</tbody></table></div>`;
+}
+
 export function renderMarkdownSafe(markdown = '') {
   const lines = String(markdown).replaceAll('\r\n', '\n').split('\n');
   const html = [];
   let list = null;
-  let table = null;
 
   const closeList = () => {
     if (list) html.push(`</${list}>`);
     list = null;
   };
-  const closeTable = () => {
-    if (table) html.push('</tbody></table></div>');
-    table = null;
-  };
 
   for (let index = 0; index < lines.length; index += 1) {
     const raw = lines[index];
     const line = raw.trim();
+
     if (!line) {
-      closeList(); closeTable();
+      closeList();
       continue;
     }
 
-    if (line.startsWith('|') && line.endsWith('|')) {
+    if (isTableRow(line)) {
       closeList();
-      const cells = line.slice(1, -1).split('|').map((cell) => cell.trim());
-      const next = lines[index + 1]?.trim() || '';
-      if (!table) {
-        html.push('<div class="md-table-wrap"><table class="md-table"><thead><tr>');
-        html.push(cells.map((cell) => `<th>${inline(cell)}</th>`).join(''));
-        html.push('</tr></thead><tbody>');
-        table = true;
-        if (/^\|?\s*:?-{3,}/.test(next)) index += 1;
-      } else {
-        html.push(`<tr>${cells.map((cell) => `<td>${inline(cell)}</td>`).join('')}</tr>`);
+
+      const block = [line];
+      let cursor = index + 1;
+
+      while (cursor < lines.length) {
+        const nextRaw = lines[cursor];
+        const nextLine = nextRaw.trim();
+
+        if (!nextLine) {
+          cursor += 1;
+          continue;
+        }
+
+        if (!isTableRow(nextLine)) break;
+
+        block.push(nextLine);
+        cursor += 1;
       }
+
+      html.push(renderTableBlock(block));
+      index = cursor - 1;
       continue;
     }
-    closeTable();
 
     if (line.startsWith('### ')) {
-      closeList(); html.push(`<h4>${inline(line.slice(4))}</h4>`); continue;
+      closeList();
+      html.push(`<h4>${inline(line.slice(4))}</h4>`);
+      continue;
     }
     if (line.startsWith('## ')) {
-      closeList(); html.push(`<h3>${inline(line.slice(3))}</h3>`); continue;
+      closeList();
+      html.push(`<h3>${inline(line.slice(3))}</h3>`);
+      continue;
     }
     if (line.startsWith('# ')) {
-      closeList(); html.push(`<h2>${inline(line.slice(2))}</h2>`); continue;
+      closeList();
+      html.push(`<h2>${inline(line.slice(2))}</h2>`);
+      continue;
     }
     if (/^- /.test(line)) {
-      if (list !== 'ul') { closeList(); list = 'ul'; html.push('<ul>'); }
-      html.push(`<li>${inline(line.slice(2))}</li>`); continue;
+      if (list !== 'ul') {
+        closeList();
+        list = 'ul';
+        html.push('<ul>');
+      }
+      html.push(`<li>${inline(line.slice(2))}</li>`);
+      continue;
     }
     if (/^\d+\. /.test(line)) {
-      if (list !== 'ol') { closeList(); list = 'ol'; html.push('<ol>'); }
-      html.push(`<li>${inline(line.replace(/^\d+\. /, ''))}</li>`); continue;
+      if (list !== 'ol') {
+        closeList();
+        list = 'ol';
+        html.push('<ol>');
+      }
+      html.push(`<li>${inline(line.replace(/^\d+\. /, ''))}</li>`);
+      continue;
     }
     if (line.startsWith('> ')) {
-      closeList(); html.push(`<blockquote>${inline(line.slice(2))}</blockquote>`); continue;
+      closeList();
+      html.push(`<blockquote>${inline(line.slice(2))}</blockquote>`);
+      continue;
     }
+
     closeList();
     html.push(`<p>${inline(line)}</p>`);
   }
-  closeList(); closeTable();
+
+  closeList();
   return html.join('');
 }
