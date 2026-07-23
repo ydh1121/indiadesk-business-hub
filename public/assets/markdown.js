@@ -68,9 +68,24 @@ export function renderMarkdownSafe(markdown = '') {
     const line = raw.trim();
 
     if (!line) {
-      closeList();
-      continue;
-    }
+  const nextLine =
+    lines
+      .slice(index + 1)
+      .find((item) => item.trim())
+      ?.trim() || '';
+
+  const continuesOrderedList =
+    list === 'ol' && /^\d+\.\s+/.test(nextLine);
+
+  const continuesUnorderedList =
+    list === 'ul' && /^-\s+/.test(nextLine);
+
+  if (!continuesOrderedList && !continuesUnorderedList) {
+    closeList();
+  }
+
+  continue;
+}
 
     if (isTableRow(line)) {
       closeList();
@@ -122,15 +137,24 @@ export function renderMarkdownSafe(markdown = '') {
       html.push(`<li>${inline(line.slice(2))}</li>`);
       continue;
     }
-    if (/^\d+\. /.test(line)) {
-      if (list !== 'ol') {
-        closeList();
-        list = 'ol';
-        html.push('<ol>');
-      }
-      html.push(`<li>${inline(line.replace(/^\d+\. /, ''))}</li>`);
-      continue;
-    }
+    const orderedMatch = line.match(/^(\d+)\.\s+(.+)$/);
+
+if (orderedMatch) {
+  const itemNumber = Number(orderedMatch[1]);
+  const itemText = orderedMatch[2];
+
+  if (list !== 'ol') {
+    closeList();
+    list = 'ol';
+    html.push(`<ol start="${itemNumber}">`);
+  }
+
+  html.push(
+    `<li value="${itemNumber}">${inline(itemText)}</li>`
+  );
+
+  continue;
+}
     if (line.startsWith('> ')) {
       closeList();
       html.push(`<blockquote>${inline(line.slice(2))}</blockquote>`);
