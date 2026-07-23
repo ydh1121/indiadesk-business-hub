@@ -97,19 +97,35 @@ export function renderMarkdownSafe(markdown = '') {
       let cursor = index + 1;
 
       while (cursor < lines.length) {
-        const nextRaw = lines[cursor];
-        const nextLine = nextRaw.trim();
+  const nextLine = lines[cursor].trim();
 
-        if (!nextLine) {
-          cursor += 1;
-          continue;
-        }
+  if (isTableRow(nextLine)) {
+    block.push(nextLine);
+    cursor += 1;
+    continue;
+  }
+  if (!nextLine) {
+    let probe = cursor;
 
-        if (!isTableRow(nextLine)) break;
+    while (
+      probe < lines.length &&
+      !lines[probe].trim()
+    ) {
+      probe += 1;
+    }
 
-        block.push(nextLine);
-        cursor += 1;
-      }
+    if (
+      probe < lines.length &&
+      isTableRow(lines[probe].trim())
+    ) {
+      block.push(lines[probe].trim());
+      cursor = probe + 1;
+      continue;
+    }
+  }
+
+  break;
+}
 
       html.push(renderTableBlock(block));
       index = cursor - 1;
