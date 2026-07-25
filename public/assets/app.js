@@ -15,6 +15,9 @@ const state = {
   documents: [],
   settings: {},
   settingsLoaded: false,
+  access: { initialized: false, allowed: new Set() },
+  accessLoaded: false,
+  architecture: [],
   admin: {},
 };
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -53,14 +56,25 @@ function toast(message) {
   setTimeout(() => el.classList.add('hidden'), 2600);
 }
 
-function showLogin() { $('#app').classList.add('hidden'); $('#loginPage').classList.remove('hidden'); state.me = null; state.csrf = ''; }
+function showLogin() {
+  $('#app').classList.add('hidden');
+  $('#loginPage').classList.remove('hidden');
+  state.me = null;
+  state.csrf = '';
+  state.access = { initialized: false, allowed: new Set() };
+  state.accessLoaded = false;
+  state.contents = [];
+  state.documents = [];
+  state.architecture = [];
+}
 function showApp() {
   $('#loginPage').classList.add('hidden'); $('#app').classList.remove('hidden');
   $('#sideName').textContent = state.me.displayName || state.me.username;
-  $('#sideRole').textContent = state.me.role === 'admin' ? 'ADMIN · 기기 제한 없음' : 'GUEST · PC 1 + MOBILE 1';
+  $('#sideRole').textContent = state.me.role === 'admin' ? 'ADMIN · 기기 제한 없음' : 'GUEST · 개별 공개 범위';
   $('#sessionInfo').textContent = `${state.me.username} · ${deviceInfo().category.toUpperCase()}`;
   $('#adminNav').classList.toggle('hidden', state.me.role !== 'admin');
   $('#mobileAdminNav').classList.toggle('hidden', state.me.role !== 'admin');
+  applyNavigationPermissions();
 }
 
 function hero() {
@@ -73,6 +87,41 @@ async function loadSettings() {
   const data = await api('/api/settings');
   state.settings = data.settings || {};
   state.settingsLoaded = true;
+}
+
+async function loadAccess() {
+  const data = await api('/api/access');
+  state.access = {
+    initialized: Boolean(data.initialized),
+    allowed: new Set(data.allowed || []),
+  };
+  state.accessLoaded = true;
+}
+
+function canAccess(type, key) {
+  if (state.me?.role === 'admin') return true;
+  return state.access.allowed.has(`${type}:${key}`);
+}
+
+function firstAllowedView() {
+  return ['plans', 'architecture', 'documents'].find((view) => canAccess('menu', view)) || null;
+}
+
+function applyNavigationPermissions() {
+  $$('[data-view]').forEach((element) => {
+    const view = element.dataset.view;
+    if (!view) return;
+    const visible = view === 'admin'
+      ? state.me?.role === 'admin'
+      : canAccess('menu', view);
+    element.classList.toggle('hidden', !visible);
+  });
+}
+
+function showNoAccessiblePage() {
+  state.view = '';
+  $('#viewTitle').textContent = '접근 권한';
+  $('#content').innerHTML = '<div class="error-box">현재 계정에 공개된 메뉴가 없습니다. 관리자에게 공개 범위를 요청하세요.</div>';
 }
 
 function fallbackPlanLabel(pageKey) {
@@ -147,17 +196,17 @@ async function renderPlans() {
   $('#content').innerHTML = `${hero()}<div class="page-toolbar"><div class="tabs">${tabButtons}</div>${state.me.role==='admin'?'<button id="initializeContent" class="secondary">기본 내용 시트에 초기화</button>':''}</div><div class="section-list">${sections}</div>`;
 }
 
-function renderArchitecture() {
-  const steps = [
-    ['01','콘텐츠·정보','Indiadesk 피드, 프레스, 세미나, 시행사 고객DB'],
-    ['02','파트너 선발','20명 유료 선발, IBS 30일 기본과정'],
-    ['03','기업 유입','기업·제품·오더 등록, 보호정보 승인'],
-    ['04','시장검증','현장·소비자·가격·패키지·채널 검증'],
-    ['05','IBS 실행','법인·공장·인증·부동산·쇼룸·현지관리'],
-    ['06','Ctrl Shift 거래','조건매칭·제안·협상·MOQ·계약·정산'],
-    ['07','반복수익','수출·리테이너·제휴·구독·고급과정']
-  ];
-  $('#content').innerHTML = `${hero()}<div class="page-toolbar"><h2>Full Funnel 아키텍처</h2></div><div class="section-list">${steps.map(([n,t,d])=>`<article class="content-card"><div class="content-card-head"><div><div class="eyebrow">STEP ${n}</div><h3>${t}</h3></div></div><div class="content-card-body"><p>${d}</p></div></article>`).join('')}</div>`;
+async function renderArchitecture() {
+  if (!state.architecture.length) {
+    const data = await api('/api/architecture');
+    state.architecture = data.items || [];
+  }
+
+  const sections = state.architecture.length
+    ? state.architecture.map((item) => `<article class="content-card"><div class="content-card-head"><div><div class="eyebrow">STEP ${escapeHtml(item.number)}</div><h3>${escapeHtml(item.title)}</h3></div></div><div class="content-card-body"><p>${escapeHtml(item.description)}</p></div></article>`).join('')
+    : '<div class="empty-state">현재 계정에 공개된 통합 아키텍처 단계가 없습니다.</div>';
+
+  $('#content').innerHTML = `${hero()}<div class="page-toolbar"><h2>Full Funnel 아키텍처</h2></div><div class="section-list">${sections}</div>`;
 }
 
 async function renderDocuments() {
@@ -175,20 +224,35 @@ async function renderAdmin() {
   if (state.me.role !== 'admin') return navigate('plans');
   const [accounts, devices, logs] = await Promise.all([api('/api/admin/accounts'), api('/api/admin/devices'), api('/api/admin/logs')]);
   state.admin = { accounts: accounts.items || [], devices: devices.items || [], logs: logs.items || [] };
-  const accountRows = state.admin.accounts.map((a) => `<tr><td><span class="status-dot ${escapeHtml(a.status)}"></span>${escapeHtml(a.username)}</td><td>${escapeHtml(a.displayName)}</td><td>${escapeHtml(a.role)}</td><td>${escapeHtml(a.status)}</td><td>${escapeHtml(a.devicePolicy)}</td><td>${a.pcLimit}</td><td>${a.mobileLimit}</td><td><div class="inline-actions"><button class="secondary" data-account-edit="${escapeHtml(a.username)}">설정</button><button class="ghost" data-account-password="${escapeHtml(a.username)}">비밀번호</button></div></td></tr>`).join('');
+  const accountRows = state.admin.accounts.map((a) => {
+    const permissionButton = a.role === 'admin' ? '' : `<button class="ghost" data-account-permissions="${escapeHtml(a.username)}">공개 범위</button>`;
+    return `<tr><td><span class="status-dot ${escapeHtml(a.status)}"></span>${escapeHtml(a.username)}</td><td>${escapeHtml(a.displayName)}</td><td>${escapeHtml(a.role)}</td><td>${escapeHtml(a.status)}</td><td>${escapeHtml(a.devicePolicy)}</td><td>${a.pcLimit}</td><td>${a.mobileLimit}</td><td><div class="inline-actions"><button class="secondary" data-account-edit="${escapeHtml(a.username)}">설정</button><button class="ghost" data-account-password="${escapeHtml(a.username)}">비밀번호</button>${permissionButton}</div></td></tr>`;
+  }).join('');
   const deviceRows = state.admin.devices.slice().reverse().slice(0,200).map((d) => `<tr><td>${escapeHtml(d.username)}</td><td>${escapeHtml(d.category)}</td><td>${escapeHtml(d.os)}</td><td>${escapeHtml(d.browser)}</td><td>${escapeHtml(d.country)} ${escapeHtml(d.city)}</td><td>${escapeHtml(d.lastIp)}</td><td>${escapeHtml(d.lastSeen)}</td><td>${d.active?'활성':'해제'}</td><td><button class="${d.active?'danger':'secondary'}" data-device-toggle="${escapeHtml(d.deviceId)}" data-device-active="${d.active}">${d.active?'해제':'활성화'}</button></td></tr>`).join('');
   const logRows = state.admin.logs.slice().reverse().slice(0,200).map((l) => `<tr><td>${escapeHtml(l.timestamp)}</td><td>${escapeHtml(l.username)}</td><td>${escapeHtml(l.event)}</td><td>${l.success?'성공':'실패'}</td><td>${escapeHtml(l.reason)}</td><td>${escapeHtml(l.ip)}</td><td>${escapeHtml(l.country)} ${escapeHtml(l.city)}</td><td>${escapeHtml(l.category)} · ${escapeHtml(l.os)}</td></tr>`).join('');
   $('#content').innerHTML = `<div class="page-toolbar"><div><h2>관리자</h2><p class="muted">계정·기기·접속기록과 콘텐츠·문서 메타데이터를 관리합니다.</p></div></div><div class="admin-grid"><section class="admin-card"><h3>계정</h3><div class="table-wrap"><table class="admin-table"><thead><tr><th>계정</th><th>표시명</th><th>역할</th><th>상태</th><th>초과정책</th><th>PC</th><th>모바일</th><th>관리</th></tr></thead><tbody>${accountRows}</tbody></table></div></section><section class="admin-card"><h3>등록 기기</h3><div class="table-wrap"><table class="admin-table"><thead><tr><th>계정</th><th>분류</th><th>OS</th><th>브라우저</th><th>국가·도시</th><th>최근 IP</th><th>최근 접속</th><th>상태</th><th>관리</th></tr></thead><tbody>${deviceRows}</tbody></table></div></section><section class="admin-card"><h3>접속 로그</h3><div class="table-wrap"><table class="admin-table"><thead><tr><th>시간</th><th>계정</th><th>이벤트</th><th>결과</th><th>사유</th><th>IP</th><th>국가·도시</th><th>기기</th></tr></thead><tbody>${logRows}</tbody></table></div></section></div>`;
 }
 
 async function navigate(view) {
+  if (view === 'admin' && state.me?.role !== 'admin') {
+    const fallback = firstAllowedView();
+    if (fallback) return navigate(fallback);
+    return showNoAccessiblePage();
+  }
+
+  if (view !== 'admin' && !canAccess('menu', view)) {
+    const fallback = firstAllowedView();
+    if (fallback && fallback !== view) return navigate(fallback);
+    return showNoAccessiblePage();
+  }
+
   state.view = view;
   $$('.nav-button, .mobile-nav button').forEach((el) => el.classList.toggle('active', el.dataset.view === view));
   $('#viewTitle').textContent = ({plans:'사업계획서',architecture:'통합 아키텍처',documents:'문서 다운로드',admin:'관리자'})[view];
   $('#content').innerHTML = '<div class="loading">내용을 불러오는 중입니다.</div>';
   try {
     if (view === 'plans') await renderPlans();
-    else if (view === 'architecture') renderArchitecture();
+    else if (view === 'architecture') await renderArchitecture();
     else if (view === 'documents') await renderDocuments();
     else if (view === 'admin') await renderAdmin();
   } catch (error) { $('#content').innerHTML = `<div class="error-box">${escapeHtml(error.message)}</div>`; }
@@ -214,6 +278,28 @@ function openPasswordEditor(username) {
   modal(`${username} 비밀번호 설정`, `<form id="passwordEditForm"><input type="hidden" name="username" value="${escapeHtml(username)}"><div class="field"><label>새 비밀번호</label><input type="password" name="password" minlength="10" required></div><div class="field"><label>새 비밀번호 확인</label><input type="password" name="confirm" minlength="10" required></div></form>`, '<button class="ghost" data-close-modal>취소</button><button class="primary" data-save-password>변경</button>');
 }
 
+async function openPermissionsEditor(username) {
+  const data = await api(`/api/admin/permissions?username=${encodeURIComponent(username)}`);
+  state.admin.permissionEditor = data;
+  const allowed = new Set(data.allowed || []);
+
+  const groups = (data.groups || []).map((group) => {
+    const items = group.items.map((item) => `<label class="permission-item"><input type="checkbox" name="permission" value="${escapeHtml(item.id)}" ${item.parentId ? `data-parent-id="${escapeHtml(item.parentId)}"` : ''} ${allowed.has(item.id) ? 'checked' : ''}><span><strong>${escapeHtml(item.label)}</strong>${item.description ? `<small>${escapeHtml(item.description)}</small>` : ''}</span></label>`).join('');
+    return `<section class="permission-group"><div class="permission-group-head"><h4>${escapeHtml(group.label)}</h4><button type="button" class="ghost permission-group-toggle" data-permission-group="${escapeHtml(group.key)}">그룹 전환</button></div><div class="permission-list" data-permission-group-list="${escapeHtml(group.key)}">${items}</div></section>`;
+  }).join('');
+
+  const legacyNotice = data.initialized
+    ? '<div class="success-box">저장된 공개 범위를 적용 중입니다. 새로 추가되는 콘텐츠는 기본 비공개입니다.</div>'
+    : '<div class="error-box">이 계정은 아직 공개 범위를 저장하지 않아 기존처럼 전체 공개 상태입니다. 저장하는 순간부터 선택된 항목만 공개됩니다.</div>';
+
+  modal(
+    `${data.displayName || username} 공개 범위`,
+    `<form id="permissionsForm" class="permission-editor"><input type="hidden" name="username" value="${escapeHtml(username)}">${legacyNotice}<div class="permission-toolbar"><button type="button" class="secondary" data-permission-action="all">전체 선택</button><button type="button" class="ghost" data-permission-action="none">전체 해제</button></div>${groups}</form>`,
+    '<button class="ghost" data-close-modal>취소</button><button class="primary" data-save-permissions>공개 범위 저장</button>',
+  );
+  $('.modal')?.classList.add('modal-wide');
+}
+
 function openDocumentEditor(id) {
   const d = state.documents.find((x) => x.id === id);
   modal('문서 메타데이터 수정', `<form id="documentEditForm"><input type="hidden" name="id" value="${escapeHtml(id)}"><div class="field"><label>문서명</label><input name="title" value="${escapeHtml(d.title)}"></div><div class="field"><label>용도</label><input name="purpose" value="${escapeHtml(d.purpose)}"></div><div class="field"><label>설명</label><textarea name="description" style="min-height:120px">${escapeHtml(d.description)}</textarea></div><div class="field"><label>상태</label><input name="status" value="${escapeHtml(d.status)}"></div><div class="field"><label>파일 URL</label><input name="fileUrl" value="${escapeHtml(d.fileUrl)}"></div><div class="field"><label>버전</label><input name="version" value="${escapeHtml(d.version)}"></div></form>`, '<button class="ghost" data-close-modal>취소</button><button class="primary" data-save-document>저장</button>');
@@ -227,12 +313,43 @@ $('#loginForm').addEventListener('submit', async (event) => {
   event.preventDefault(); const msg = $('#loginMessage'); msg.innerHTML = '';
   try {
     const data = await api('/api/login', { method: 'POST', body: JSON.stringify({ username: $('#username').value.trim(), password: $('#password').value, device: deviceInfo() }) });
-    state.me = data.user; state.csrf = data.csrf; showApp(); await navigate('plans');
+    state.me = data.user; state.csrf = data.csrf; await loadAccess(); showApp(); const initialView = firstAllowedView() || (state.me.role === 'admin' ? 'admin' : null); if (initialView) await navigate(initialView); else showNoAccessiblePage();
   } catch (error) { msg.innerHTML = `<div class="error-box">${escapeHtml(error.message)}</div>`; }
 });
 
 $('#bootstrapOpen').addEventListener('click', bootstrapModal);
 $('#logoutButton').addEventListener('click', async () => { try { await api('/api/logout', {method:'POST'}); } finally { showLogin(); } });
+
+window.addEventListener('change', (event) => {
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement) || input.name !== 'permission') return;
+
+  const form = input.closest('#permissionsForm');
+  if (!form) return;
+
+  if (input.checked) {
+    let parentId = input.dataset.parentId;
+    while (parentId) {
+      const parent = [...form.querySelectorAll('input[name="permission"]')]
+        .find((candidate) => candidate.value === parentId);
+      if (!parent) break;
+      parent.checked = true;
+      parentId = parent.dataset.parentId;
+    }
+    return;
+  }
+
+  const uncheckChildren = (parentId) => {
+    [...form.querySelectorAll('input[name="permission"]')]
+      .filter((candidate) => candidate.dataset.parentId === parentId)
+      .forEach((child) => {
+        child.checked = false;
+        uncheckChildren(child.value);
+      });
+  };
+
+  uncheckChildren(input.value);
+});
 
 window.addEventListener('click', async (event) => {
   const target = event.target.closest('button,a'); if (!target) return;
@@ -242,7 +359,20 @@ window.addEventListener('click', async (event) => {
   if (target.dataset.editContent) return openContentEditor(target.dataset.editContent);
   if (target.dataset.accountEdit) return openAccountEditor(target.dataset.accountEdit);
   if (target.dataset.accountPassword) return openPasswordEditor(target.dataset.accountPassword);
+  if (target.dataset.accountPermissions) return openPermissionsEditor(target.dataset.accountPermissions);
   if (target.dataset.editDocument) return openDocumentEditor(target.dataset.editDocument);
+  if (target.dataset.permissionAction) {
+    const checked = target.dataset.permissionAction === 'all';
+    $$('#permissionsForm input[name="permission"]').forEach((input) => { input.checked = checked; });
+    return;
+  }
+  if (target.dataset.permissionGroup) {
+    const group = target.dataset.permissionGroup;
+    const inputs = $$(`[data-permission-group-list="${CSS.escape(group)}"] input[name="permission"]`);
+    const shouldCheck = inputs.some((input) => !input.checked);
+    inputs.forEach((input) => { input.checked = shouldCheck; });
+    return;
+  }
   if (target.id === 'initializeContent') {
     if (!confirm('기본 내용을 Google Sheets Content 탭에 초기화합니다. 기존 동일 섹션은 유지됩니다.')) return;
     await api('/api/admin/initialize-content', { method:'POST', body:'{}' }); state.contents=[]; toast('기본 내용이 초기화되었습니다.'); return renderPlans();
@@ -259,6 +389,15 @@ window.addEventListener('click', async (event) => {
     const payload=Object.fromEntries(new FormData($('#passwordEditForm'))); if(payload.password!==payload.confirm) return alert('비밀번호가 일치하지 않습니다.');
     await api('/api/admin/accounts',{method:'PUT',body:JSON.stringify({username:payload.username,password:payload.password,status:'active'})}); closeModal(); toast('비밀번호를 설정했습니다.'); return renderAdmin();
   }
+  if (target.dataset.savePermissions !== undefined) {
+    const form = $('#permissionsForm');
+    const username = form.querySelector('input[name="username"]').value;
+    const allowed = $$('input[name="permission"]:checked', form).map((input) => input.value);
+    await api('/api/admin/permissions', { method: 'PUT', body: JSON.stringify({ username, allowed }) });
+    closeModal();
+    toast('계정별 공개 범위를 저장했습니다.');
+    return renderAdmin();
+  }
   if (target.dataset.deviceToggle) {
     await api('/api/admin/devices',{method:'PUT',body:JSON.stringify({deviceId:target.dataset.deviceToggle,active:target.dataset.deviceActive!=='true'})}); toast('기기 상태를 변경했습니다.'); return renderAdmin();
   }
@@ -273,6 +412,6 @@ window.addEventListener('click', async (event) => {
 
 (async function start() {
   try {
-    const data = await api('/api/me'); state.me = data.user; state.csrf = data.csrf; showApp(); await navigate('plans');
+    const data = await api('/api/me'); state.me = data.user; state.csrf = data.csrf; await loadAccess(); showApp(); const initialView = firstAllowedView() || (state.me.role === 'admin' ? 'admin' : null); if (initialView) await navigate(initialView); else showNoAccessiblePage();
   } catch { showLogin(); }
 })();

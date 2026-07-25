@@ -1,0 +1,1186 @@
+diff --git a/functions/_shared/permissions.ts b/functions/_shared/permissions.ts
+new file mode 100644
+index 0000000..fed54a5
+--- /dev/null
++++ b/functions/_shared/permissions.ts
+@@ -0,0 +1,240 @@
++import type { Env } from './types';
++import { getRange } from './google';
++
++export type PermissionResourceType =
++  | 'menu'
++  | 'plan'
++  | 'content'
++  | 'architecture'
++  | 'document'
++  | 'system';
++
++export type PermissionCatalogItem = {
++  id: string;
++  type: Exclude<PermissionResourceType, 'system'>;
++  key: string;
++  label: string;
++  group: string;
++  parentId?: string;
++  description?: string;
++};
++
++export type PermissionRow = {
++  row: number;
++  username: string;
++  resourceType: PermissionResourceType;
++  resourceKey: string;
++  allowed: boolean;
++  updatedAt: string;
++  updatedBy: string;
++};
++
++export type ArchitectureItem = {
++  key: string;
++  number: string;
++  title: string;
++  description: string;
++  sortOrder: number;
++};
++
++export async function architectureItems(env: Env): Promise<ArchitectureItem[]> {
++  const rows = await getRange(env, 'Architecture!A2:E1000');
++  return rows
++    .filter((row) => row[0])
++    .map((row) => ({
++      key: row[0],
++      number: row[1] || '',
++      title: row[2] || row[0],
++      description: row[3] || '',
++      sortOrder: Number(row[4] || 0),
++    }))
++    .sort((a, b) => a.sortOrder - b.sortOrder);
++}
++
++const FALLBACK_PLAN_LABELS: Record<string, string> = {
++  v1: 'Version 1 · 기본사업',
++  v2: 'Version 2 · 통합사업',
++  v3: 'Version 3 · 실행 오더 데스크',
++};
++
++const boolValue = (value: unknown) => {
++  const normalized = String(value ?? '').trim().toUpperCase();
++  return normalized === 'TRUE' || normalized === '1' || normalized === 'YES' || normalized === 'Y';
++};
++
++export const permissionId = (type: PermissionResourceType, key: string) => `${type}:${key}`;
++
++export async function permissionRows(env: Env): Promise<PermissionRow[]> {
++  const rows = await getRange(env, 'Permissions!A2:F20000');
++  return rows
++    .filter((row) => row[0] && row[1] && row[2])
++    .map((row, index) => ({
++      row: index + 2,
++      username: row[0],
++      resourceType: row[1] as PermissionResourceType,
++      resourceKey: row[2],
++      allowed: boolValue(row[3]),
++      updatedAt: row[4] || '',
++      updatedBy: row[5] || '',
++    }));
++}
++
++export async function userPermissionState(
++  env: Env,
++  username: string,
++  role: 'admin' | 'guest',
++) {
++  if (role === 'admin') {
++    return {
++      initialized: true,
++      admin: true,
++      rules: new Map<string, boolean>(),
++      can: (_type: PermissionResourceType, _key: string) => true,
++    };
++  }
++
++  const rules = new Map<string, boolean>();
++  const rows = await permissionRows(env);
++
++  // 동일 자원에 중복 행이 있으면 아래쪽의 최신 행을 적용한다.
++  for (const row of rows) {
++    if (row.username !== username) continue;
++    rules.set(permissionId(row.resourceType, row.resourceKey), row.allowed);
++  }
++
++  const initialized = rules.get(permissionId('system', 'initialized')) === true;
++
++  return {
++    initialized,
++    admin: false,
++    rules,
++    // 권한을 한 번도 저장하지 않은 기존 계정은 배포 직후 잠기지 않도록 기존 전체 공개 상태를 유지한다.
++    // 관리자가 공개 범위를 저장한 시점부터 명시적으로 허용된 자원만 공개한다.
++    can: (type: PermissionResourceType, key: string) =>
++      !initialized || rules.get(permissionId(type, key)) === true,
++  };
++}
++
++function parsePlanLabels(rows: string[][]) {
++  const labels = { ...FALLBACK_PLAN_LABELS };
++  const raw = rows.find((row) => row[0] === 'business_plan_tabs')?.[1];
++  if (!raw) return labels;
++
++  try {
++    const parsed = JSON.parse(raw);
++    if (Array.isArray(parsed)) {
++      for (const item of parsed) {
++        const pageKey = String(item?.page_key || item?.pageKey || '').trim();
++        const label = String(item?.label || '').trim();
++        if (pageKey && label) labels[pageKey] = label;
++      }
++    }
++  } catch {
++    // 설정값이 깨져 있어도 기본 표시명으로 권한 편집을 계속할 수 있게 한다.
++  }
++
++  return labels;
++}
++
++export async function permissionCatalog(env: Env): Promise<PermissionCatalogItem[]> {
++  const [contentRows, documentRows, settingRows, architecture] = await Promise.all([
++    getRange(env, 'Content!A2:H3000'),
++    getRange(env, 'Documents!A2:K2000'),
++    getRange(env, 'Settings!A2:E1000'),
++    architectureItems(env),
++  ]);
++
++  const labels = parsePlanLabels(settingRows);
++  const content = contentRows
++    .filter((row) => row[0] && row[1])
++    .map((row) => ({
++      pageKey: row[0],
++      sectionKey: row[1],
++      sortOrder: Number(row[2] || 0),
++      title: row[3] || row[1],
++    }));
++
++  const pageOrder: string[] = [];
++  for (const item of content) {
++    if (!pageOrder.includes(item.pageKey)) pageOrder.push(item.pageKey);
++  }
++
++  const catalog: PermissionCatalogItem[] = [
++    {
++      id: permissionId('menu', 'plans'),
++      type: 'menu',
++      key: 'plans',
++      label: '사업계획서',
++      group: '상위 메뉴',
++      description: '사업계획서 메뉴와 허용된 버전·섹션을 표시합니다.',
++    },
++    {
++      id: permissionId('menu', 'architecture'),
++      type: 'menu',
++      key: 'architecture',
++      label: '통합 아키텍처',
++      group: '상위 메뉴',
++      description: '통합 아키텍처 메뉴와 허용된 단계를 표시합니다.',
++    },
++    {
++      id: permissionId('menu', 'documents'),
++      type: 'menu',
++      key: 'documents',
++      label: '문서 다운로드',
++      group: '상위 메뉴',
++      description: '문서 목록과 허용된 다운로드 항목을 표시합니다.',
++    },
++  ];
++
++  for (const pageKey of pageOrder) {
++    catalog.push({
++      id: permissionId('plan', pageKey),
++      type: 'plan',
++      key: pageKey,
++      label: labels[pageKey] || pageKey.toUpperCase(),
++      group: '사업계획서 버전',
++      parentId: permissionId('menu', 'plans'),
++    });
++  }
++
++  for (const item of content.sort((a, b) => {
++    const pageDiff = pageOrder.indexOf(a.pageKey) - pageOrder.indexOf(b.pageKey);
++    return pageDiff || a.sortOrder - b.sortOrder;
++  })) {
++    catalog.push({
++      id: permissionId('content', `${item.pageKey}/${item.sectionKey}`),
++      type: 'content',
++      key: `${item.pageKey}/${item.sectionKey}`,
++      label: `${labels[item.pageKey] || item.pageKey.toUpperCase()} · ${item.title}`,
++      group: '사업계획서 세부 내용',
++      parentId: permissionId('plan', item.pageKey),
++      description: `${item.pageKey.toUpperCase()} · ${String(item.sortOrder).padStart(2, '0')}`,
++    });
++  }
++
++  for (const item of architecture) {
++    catalog.push({
++      id: permissionId('architecture', item.key),
++      type: 'architecture',
++      key: item.key,
++      label: `${item.number} · ${item.title}`,
++      group: '통합 아키텍처 단계',
++      parentId: permissionId('menu', 'architecture'),
++      description: item.description,
++    });
++  }
++
++  for (const row of documentRows.filter((item) => item[0])) {
++    catalog.push({
++      id: permissionId('document', row[0]),
++      type: 'document',
++      key: row[0],
++      label: row[1] || row[0],
++      group: '문서 다운로드 항목',
++      parentId: permissionId('menu', 'documents'),
++      description: [row[2], row[7]].filter(Boolean).join(' · '),
++    });
++  }
++
++  return catalog;
++}
+diff --git a/functions/api/access.ts b/functions/api/access.ts
+new file mode 100644
+index 0000000..3a49876
+--- /dev/null
++++ b/functions/api/access.ts
+@@ -0,0 +1,26 @@
++import type { Env, PagesFunction } from '../_shared/types';
++import { auth } from '../_shared/guard';
++import { ok } from '../_shared/response';
++import { permissionCatalog, userPermissionState } from '../_shared/permissions';
++
++export const onRequestGet: PagesFunction<Env> = async (context) => {
++  const access = await auth(context);
++  if (access.error) return access.error;
++
++  const session = access.session!;
++  const [catalog, permissionState] = await Promise.all([
++    permissionCatalog(context.env),
++    userPermissionState(context.env, session.sub, session.role),
++  ]);
++
++  const allowed = catalog
++    .filter((item) => permissionState.can(item.type, item.key))
++    .map((item) => item.id);
++
++  return ok({
++    username: session.sub,
++    role: session.role,
++    initialized: permissionState.initialized,
++    allowed,
++  });
++};
+diff --git a/functions/api/admin/permissions.ts b/functions/api/admin/permissions.ts
+new file mode 100644
+index 0000000..9f81d1a
+--- /dev/null
++++ b/functions/api/admin/permissions.ts
+@@ -0,0 +1,158 @@
++import type { Env, PagesFunction } from '../../_shared/types';
++import { auth } from '../../_shared/guard';
++import { fail, ok, readJson } from '../../_shared/response';
++import { getRange, updateRange } from '../../_shared/google';
++import { findAccount, auditLog } from '../../_shared/data';
++import { nowIso, requestMeta } from '../../_shared/request';
++import {
++  permissionCatalog,
++  permissionId,
++  userPermissionState,
++} from '../../_shared/permissions';
++
++const GROUP_ORDER = [
++  '상위 메뉴',
++  '사업계획서 버전',
++  '사업계획서 세부 내용',
++  '통합 아키텍처 단계',
++  '문서 다운로드 항목',
++];
++
++async function targetAccount(env: Env, username: string) {
++  if (!username) return { error: fail(400, '계정을 선택해야 합니다.') };
++  const account = await findAccount(env, username);
++  if (!account) return { error: fail(404, '계정을 찾을 수 없습니다.') };
++  if (account.role === 'admin') {
++    return { error: fail(400, 'Admin 계정에는 공개 범위 제한을 적용하지 않습니다.') };
++  }
++  return { account };
++}
++
++export const onRequestGet: PagesFunction<Env> = async (context) => {
++  const access = await auth(context, true);
++  if (access.error) return access.error;
++
++  const url = new URL(context.request.url);
++  const username = (url.searchParams.get('username') || '').trim();
++  const target = await targetAccount(context.env, username);
++  if (target.error) return target.error;
++
++  const [catalog, state] = await Promise.all([
++    permissionCatalog(context.env),
++    userPermissionState(context.env, username, 'guest'),
++  ]);
++
++  const allowed = catalog
++    .filter((item) => state.can(item.type, item.key))
++    .map((item) => item.id);
++
++  const groups = GROUP_ORDER.map((label) => ({
++    key: label,
++    label,
++    items: catalog.filter((item) => item.group === label),
++  })).filter((group) => group.items.length > 0);
++
++  return ok({
++    username,
++    displayName: target.account!.displayName,
++    initialized: state.initialized,
++    allowed,
++    groups,
++  });
++};
++
++export const onRequestPut: PagesFunction<Env> = async (context) => {
++  const access = await auth(context, true, true);
++  if (access.error) return access.error;
++
++  try {
++    const body = await readJson<{ username?: string; allowed?: unknown }>(context.request);
++    const username = String(body.username || '').trim();
++    const target = await targetAccount(context.env, username);
++    if (target.error) return target.error;
++
++    if (!Array.isArray(body.allowed)) {
++      return fail(400, '허용 항목 목록이 올바르지 않습니다.');
++    }
++
++    const catalog = await permissionCatalog(context.env);
++    const catalogMap = new Map(catalog.map((item) => [item.id, item]));
++    const requested = new Set(
++      body.allowed
++        .map((value) => String(value))
++        .filter((value) => catalogMap.has(value)),
++    );
++
++    const now = nowIso();
++    const actor = access.session!.sub;
++    const existing = await getRange(context.env, 'Permissions!A2:F20000');
++
++    // 선택 계정의 과거 설정은 제거하고 현재 카탈로그 기준으로 한 번에 다시 기록한다.
++    const preserved = existing
++      .filter((row) => row[0] && row[0] !== username)
++      .map((row) => [
++        row[0] || '',
++        row[1] || '',
++        row[2] || '',
++        row[3] || '',
++        row[4] || '',
++        row[5] || '',
++      ]);
++
++    const userRows = catalog.map((item) => [
++      username,
++      item.type,
++      item.key,
++      requested.has(item.id) ? 'TRUE' : 'FALSE',
++      now,
++      actor,
++    ]);
++
++    userRows.push([
++      username,
++      'system',
++      'initialized',
++      'TRUE',
++      now,
++      actor,
++    ]);
++
++    const merged = [...preserved, ...userRows];
++    const writeRowCount = Math.max(existing.length, merged.length, 1);
++    const values = [
++      ...merged,
++      ...Array.from({ length: writeRowCount - merged.length }, () => ['', '', '', '', '', '']),
++    ];
++
++    await updateRange(
++      context.env,
++      `Permissions!A2:F${writeRowCount + 1}`,
++      values,
++    );
++
++    const meta = requestMeta(context.request);
++    await auditLog(context.env, [
++      now,
++      actor,
++      'PERMISSIONS_UPDATE',
++      username,
++      '',
++      JSON.stringify({
++        initialized: true,
++        allowed: [...requested],
++        deniedCount: catalog.length - requested.size,
++      }),
++      meta.ip,
++      meta.country,
++    ]);
++
++    return ok({
++      username,
++      initialized: true,
++      allowed: [...requested],
++      total: catalog.length,
++    });
++  } catch (error) {
++    return fail(400, error instanceof Error ? error.message : '공개 범위를 저장하지 못했습니다.');
++  }
++};
+diff --git a/functions/api/architecture.ts b/functions/api/architecture.ts
+new file mode 100644
+index 0000000..86ce9bd
+--- /dev/null
++++ b/functions/api/architecture.ts
+@@ -0,0 +1,25 @@
++import type { Env, PagesFunction } from '../_shared/types';
++import { auth } from '../_shared/guard';
++import { fail, ok } from '../_shared/response';
++import { architectureItems, userPermissionState } from '../_shared/permissions';
++
++export const onRequestGet: PagesFunction<Env> = async (context) => {
++  const access = await auth(context);
++  if (access.error) return access.error;
++
++  const session = access.session!;
++  const [permissions, source] = await Promise.all([
++    userPermissionState(context.env, session.sub, session.role),
++    architectureItems(context.env),
++  ]);
++
++  if (!permissions.can('menu', 'architecture')) {
++    return fail(403, '통합 아키텍처 열람 권한이 없습니다.');
++  }
++
++  const items = source.filter((item) =>
++    permissions.can('architecture', item.key),
++  );
++
++  return ok({ items });
++};
+diff --git a/functions/api/content.ts b/functions/api/content.ts
+index 97be4d2..2f5e5ed 100644
+--- a/functions/api/content.ts
++++ b/functions/api/content.ts
+@@ -1,4 +1,105 @@
+-import type { PagesFunction } from '../_shared/types'; import type { Env } from '../_shared/types'; import { auth } from '../_shared/guard'; import { ok,fail,readJson } from '../_shared/response'; import { getRange,appendRange,updateRange } from '../_shared/google'; import { DEFAULT_CONTENT } from '../_shared/content-default'; import { auditLog } from '../_shared/data'; import { requestMeta,nowIso } from '../_shared/request';
+-async function rows(env:Env){const r=await getRange(env,'Content!A2:H3000');return r.filter(x=>x[0]).map((x,i)=>({row:i+2,pageKey:x[0],sectionKey:x[1],sortOrder:Number(x[2]||0),title:x[3],bodyMarkdown:x[4]||'',metaJson:x[5]||'',updatedAt:x[6]||'',updatedBy:x[7]||''}));}
+-export const onRequestGet: PagesFunction<Env>=async(c)=>{const a=await auth(c);if(a.error)return a.error;const items=await rows(c.env);return ok({items:items.length?items:DEFAULT_CONTENT});};
+-export const onRequestPut: PagesFunction<Env>=async(c)=>{const a=await auth(c,true,true);if(a.error)return a.error;try{const b=await readJson<any>(c.request);if(!b.pageKey||!b.sectionKey||!b.title)return fail(400,'필수 항목이 없습니다.');const list=await rows(c.env);const found=list.find(x=>x.pageKey===b.pageKey&&x.sectionKey===b.sectionKey);const now=nowIso();const values=[[b.pageKey,b.sectionKey,Number(b.sortOrder||0),b.title,b.bodyMarkdown||'','',now,a.session!.sub]];if(found)await updateRange(c.env,`Content!A${found.row}:H${found.row}`,values);else await appendRange(c.env,'Content!A:H',values);const m=requestMeta(c.request);await auditLog(c.env,[now,a.session!.sub,'CONTENT_UPDATE',`${b.pageKey}/${b.sectionKey}`,found?JSON.stringify({title:found.title,bodyMarkdown:found.bodyMarkdown}):'',JSON.stringify({title:b.title,bodyMarkdown:b.bodyMarkdown}),m.ip,m.country]);return ok();}catch(e){return fail(400,e instanceof Error?e.message:'저장 실패');}};
++import type { PagesFunction } from '../_shared/types';
++import type { Env } from '../_shared/types';
++import { auth } from '../_shared/guard';
++import { ok, fail, readJson } from '../_shared/response';
++import { getRange, appendRange, updateRange } from '../_shared/google';
++import { DEFAULT_CONTENT } from '../_shared/content-default';
++import { auditLog } from '../_shared/data';
++import { requestMeta, nowIso } from '../_shared/request';
++import { userPermissionState } from '../_shared/permissions';
++
++async function rows(env: Env) {
++  const result = await getRange(env, 'Content!A2:H3000');
++  return result
++    .filter((row) => row[0])
++    .map((row, index) => ({
++      row: index + 2,
++      pageKey: row[0],
++      sectionKey: row[1],
++      sortOrder: Number(row[2] || 0),
++      title: row[3],
++      bodyMarkdown: row[4] || '',
++      metaJson: row[5] || '',
++      updatedAt: row[6] || '',
++      updatedBy: row[7] || '',
++    }));
++}
++
++export const onRequestGet: PagesFunction<Env> = async (context) => {
++  const access = await auth(context);
++  if (access.error) return access.error;
++
++  const session = access.session!;
++  const items = await rows(context.env);
++  const source = items.length ? items : DEFAULT_CONTENT;
++
++  if (session.role === 'admin') return ok({ items: source });
++
++  const permissions = await userPermissionState(
++    context.env,
++    session.sub,
++    session.role,
++  );
++
++  if (!permissions.can('menu', 'plans')) {
++    return fail(403, '사업계획서 열람 권한이 없습니다.');
++  }
++
++  const visible = source.filter(
++    (item) =>
++      permissions.can('plan', item.pageKey) &&
++      permissions.can('content', `${item.pageKey}/${item.sectionKey}`),
++  );
++
++  return ok({ items: visible });
++};
++
++export const onRequestPut: PagesFunction<Env> = async (context) => {
++  const access = await auth(context, true, true);
++  if (access.error) return access.error;
++
++  try {
++    const body = await readJson<any>(context.request);
++    if (!body.pageKey || !body.sectionKey || !body.title) {
++      return fail(400, '필수 항목이 없습니다.');
++    }
++
++    const list = await rows(context.env);
++    const found = list.find(
++      (item) => item.pageKey === body.pageKey && item.sectionKey === body.sectionKey,
++    );
++    const now = nowIso();
++    const values = [[
++      body.pageKey,
++      body.sectionKey,
++      Number(body.sortOrder || 0),
++      body.title,
++      body.bodyMarkdown || '',
++      '',
++      now,
++      access.session!.sub,
++    ]];
++
++    if (found) {
++      await updateRange(context.env, `Content!A${found.row}:H${found.row}`, values);
++    } else {
++      await appendRange(context.env, 'Content!A:H', values);
++    }
++
++    const meta = requestMeta(context.request);
++    await auditLog(context.env, [
++      now,
++      access.session!.sub,
++      'CONTENT_UPDATE',
++      `${body.pageKey}/${body.sectionKey}`,
++      found ? JSON.stringify({ title: found.title, bodyMarkdown: found.bodyMarkdown }) : '',
++      JSON.stringify({ title: body.title, bodyMarkdown: body.bodyMarkdown }),
++      meta.ip,
++      meta.country,
++    ]);
++
++    return ok();
++  } catch (error) {
++    return fail(400, error instanceof Error ? error.message : '저장 실패');
++  }
++};
+diff --git a/functions/api/documents.ts b/functions/api/documents.ts
+index f9e4681..7afa6c7 100644
+--- a/functions/api/documents.ts
++++ b/functions/api/documents.ts
+@@ -1,4 +1,103 @@
+-import type { PagesFunction } from '../_shared/types'; import type { Env } from '../_shared/types'; import { auth } from '../_shared/guard'; import { ok,fail,readJson } from '../_shared/response'; import { getRange,updateRange } from '../_shared/google'; import { auditLog } from '../_shared/data'; import { requestMeta,nowIso } from '../_shared/request';
+-async function rows(env:Env){const r=await getRange(env,'Documents!A2:K2000');return r.filter(x=>x[0]).map((x,i)=>({row:i+2,id:x[0],title:x[1],category:x[2],purpose:x[3],description:x[4],status:x[5],fileUrl:x[6]||'',version:x[7]||'',access:x[8]||'all',updatedAt:x[9]||'',updatedBy:x[10]||''}));}
+-export const onRequestGet: PagesFunction<Env>=async(c)=>{const a=await auth(c);if(a.error)return a.error;return ok({items:(await rows(c.env)).filter(x=>x.access==='all'||a.session!.role==='admin')});};
+-export const onRequestPut: PagesFunction<Env>=async(c)=>{const a=await auth(c,true,true);if(a.error)return a.error;try{const b=await readJson<any>(c.request);const list=await rows(c.env);const d=list.find(x=>x.id===b.id);if(!d)return fail(404,'문서를 찾을 수 없습니다.');const now=nowIso();await updateRange(c.env,`Documents!A${d.row}:K${d.row}`,[[d.id,b.title||d.title,d.category,b.purpose||d.purpose,b.description||d.description,b.status||d.status,b.fileUrl??d.fileUrl,b.version||d.version,d.access,now,a.session!.sub]]);const m=requestMeta(c.request);await auditLog(c.env,[now,a.session!.sub,'DOCUMENT_UPDATE',d.id,JSON.stringify(d),JSON.stringify(b),m.ip,m.country]);return ok();}catch(e){return fail(400,e instanceof Error?e.message:'저장 실패');}};
++import type { PagesFunction } from '../_shared/types';
++import type { Env } from '../_shared/types';
++import { auth } from '../_shared/guard';
++import { ok, fail, readJson } from '../_shared/response';
++import { getRange, updateRange } from '../_shared/google';
++import { auditLog } from '../_shared/data';
++import { requestMeta, nowIso } from '../_shared/request';
++import { userPermissionState } from '../_shared/permissions';
++
++async function rows(env: Env) {
++  const result = await getRange(env, 'Documents!A2:K2000');
++  return result
++    .filter((row) => row[0])
++    .map((row, index) => ({
++      row: index + 2,
++      id: row[0],
++      title: row[1],
++      category: row[2],
++      purpose: row[3],
++      description: row[4],
++      status: row[5],
++      fileUrl: row[6] || '',
++      version: row[7] || '',
++      access: row[8] || 'all',
++      updatedAt: row[9] || '',
++      updatedBy: row[10] || '',
++    }));
++}
++
++export const onRequestGet: PagesFunction<Env> = async (context) => {
++  const access = await auth(context);
++  if (access.error) return access.error;
++
++  const session = access.session!;
++  const items = await rows(context.env);
++
++  if (session.role === 'admin') return ok({ items });
++
++  const permissions = await userPermissionState(
++    context.env,
++    session.sub,
++    session.role,
++  );
++
++  if (!permissions.can('menu', 'documents')) {
++    return fail(403, '문서 다운로드 열람 권한이 없습니다.');
++  }
++
++  const visible = items.filter(
++    (item) =>
++      item.access === 'all' &&
++      permissions.can('document', item.id),
++  );
++
++  return ok({ items: visible });
++};
++
++export const onRequestPut: PagesFunction<Env> = async (context) => {
++  const access = await auth(context, true, true);
++  if (access.error) return access.error;
++
++  try {
++    const body = await readJson<any>(context.request);
++    const list = await rows(context.env);
++    const document = list.find((item) => item.id === body.id);
++    if (!document) return fail(404, '문서를 찾을 수 없습니다.');
++
++    const now = nowIso();
++    await updateRange(
++      context.env,
++      `Documents!A${document.row}:K${document.row}`,
++      [[
++        document.id,
++        body.title || document.title,
++        body.category || document.category,
++        body.purpose || document.purpose,
++        body.description || document.description,
++        body.status || document.status,
++        body.fileUrl ?? document.fileUrl,
++        body.version || document.version,
++        body.access || document.access,
++        now,
++        access.session!.sub,
++      ]],
++    );
++
++    const meta = requestMeta(context.request);
++    await auditLog(context.env, [
++      now,
++      access.session!.sub,
++      'DOCUMENT_UPDATE',
++      document.id,
++      JSON.stringify(document),
++      JSON.stringify(body),
++      meta.ip,
++      meta.country,
++    ]);
++
++    return ok();
++  } catch (error) {
++    return fail(400, error instanceof Error ? error.message : '저장 실패');
++  }
++};
+diff --git a/functions/downloads/[[path]].ts b/functions/downloads/[[path]].ts
+index 602fd07..b0fede3 100644
+--- a/functions/downloads/[[path]].ts
++++ b/functions/downloads/[[path]].ts
+@@ -1,8 +1,37 @@
+ import type { Env, PagesFunction } from '../_shared/types';
+ import { auth } from '../_shared/guard';
+ import { fail } from '../_shared/response';
++import { getRange } from '../_shared/google';
++import { userPermissionState } from '../_shared/permissions';
+ 
+-const safePath = (value: string) => /^[A-Za-z0-9._-]+$/.test(value) && !value.startsWith('.');
++const safePath = (value: string) =>
++  /^[A-Za-z0-9._-]+$/.test(value) && !value.startsWith('.');
++
++function filenameFromDocumentUrl(fileUrl: string, requestUrl: string) {
++  if (!fileUrl) return '';
++  try {
++    const pathname = new URL(fileUrl, requestUrl).pathname;
++    if (!pathname.startsWith('/downloads/')) return '';
++    return decodeURIComponent(pathname.slice('/downloads/'.length));
++  } catch {
++    return '';
++  }
++}
++
++async function findDocument(env: Env, filename: string, requestUrl: string) {
++  const rows = await getRange(env, 'Documents!A2:K2000');
++  const row = rows.find(
++    (item) =>
++      item[0] &&
++      filenameFromDocumentUrl(item[6] || '', requestUrl) === filename,
++  );
++
++  if (!row) return null;
++  return {
++    id: row[0],
++    access: row[8] || 'all',
++  };
++}
+ 
+ export const onRequestGet: PagesFunction<Env> = async (context) => {
+   const access = await auth(context);
+@@ -11,11 +40,37 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
+   const raw = context.params.path;
+   const filename = Array.isArray(raw) ? raw.join('/') : String(raw || '');
+   if (!safePath(filename)) return fail(400, '잘못된 파일 경로입니다.');
+-  if (!context.env.ASSETS) return fail(500, '정적 파일 바인딩이 설정되지 않았습니다.');
++
++  const session = access.session!;
++  if (session.role !== 'admin') {
++    const document = await findDocument(context.env, filename, context.request.url);
++    if (!document || document.access !== 'all') {
++      return fail(403, '이 문서를 다운로드할 권한이 없습니다.');
++    }
++
++    const permissions = await userPermissionState(
++      context.env,
++      session.sub,
++      session.role,
++    );
++
++    if (
++      !permissions.can('menu', 'documents') ||
++      !permissions.can('document', document.id)
++    ) {
++      return fail(403, '이 문서를 다운로드할 권한이 없습니다.');
++    }
++  }
++
++  if (!context.env.ASSETS) {
++    return fail(500, '정적 파일 바인딩이 설정되지 않았습니다.');
++  }
+ 
+   const assetUrl = new URL(`/downloads/${filename}`, context.request.url);
+   const asset = await context.env.ASSETS.fetch(new Request(assetUrl, context.request));
+-  if (!asset.ok) return fail(asset.status === 404 ? 404 : 502, '파일을 불러올 수 없습니다.');
++  if (!asset.ok) {
++    return fail(asset.status === 404 ? 404 : 502, '파일을 불러올 수 없습니다.');
++  }
+ 
+   const headers = new Headers(asset.headers);
+   headers.set('cache-control', 'private, no-store');
+diff --git a/public/assets/access-control.css b/public/assets/access-control.css
+new file mode 100644
+index 0000000..160ee54
+--- /dev/null
++++ b/public/assets/access-control.css
+@@ -0,0 +1,115 @@
++.modal.modal-wide {
++  width: min(1120px, 100%);
++}
++
++.permission-editor {
++  display: grid;
++  gap: 16px;
++  margin-top: 18px;
++}
++
++.permission-toolbar {
++  display: flex;
++  gap: 8px;
++  flex-wrap: wrap;
++}
++
++.permission-group {
++  border: 1px solid var(--line);
++  border-radius: 14px;
++  overflow: hidden;
++  background: #fff;
++}
++
++.permission-group-head {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 12px;
++  padding: 12px 14px;
++  background: #f3f6f8;
++  border-bottom: 1px solid var(--line);
++}
++
++.permission-group-head h4 {
++  margin: 0;
++  color: var(--navy);
++  font-size: 14px;
++}
++
++.permission-group-toggle {
++  padding: 7px 10px;
++  font-size: 11px;
++}
++
++.permission-list {
++  display: grid;
++  grid-template-columns: repeat(2, minmax(0, 1fr));
++  gap: 0;
++}
++
++.permission-item {
++  display: flex;
++  align-items: flex-start;
++  gap: 10px;
++  min-width: 0;
++  padding: 12px 14px;
++  border-bottom: 1px solid #edf1f3;
++  cursor: pointer;
++}
++
++.permission-item:nth-child(odd) {
++  border-right: 1px solid #edf1f3;
++}
++
++.permission-item:hover {
++  background: #f8fafb;
++}
++
++.permission-item input {
++  flex: 0 0 auto;
++  width: 17px;
++  height: 17px;
++  margin: 2px 0 0;
++  accent-color: var(--teal);
++}
++
++.permission-item span {
++  display: grid;
++  gap: 3px;
++  min-width: 0;
++}
++
++.permission-item strong {
++  color: var(--ink);
++  font-size: 13px;
++  line-height: 1.45;
++  overflow-wrap: anywhere;
++}
++
++.permission-item small {
++  color: var(--muted);
++  font-size: 11px;
++  line-height: 1.45;
++  overflow-wrap: anywhere;
++}
++
++@media (max-width: 980px) {
++  .mobile-nav {
++    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
++  }
++}
++
++@media (max-width: 720px) {
++  .modal.modal-wide {
++    padding: 18px;
++  }
++
++  .permission-list {
++    grid-template-columns: 1fr;
++  }
++
++  .permission-item:nth-child(odd) {
++    border-right: 0;
++  }
++}
+diff --git a/public/assets/app.js b/public/assets/app.js
+index 8acbc6f..09d4b8a 100644
+--- a/public/assets/app.js
++++ b/public/assets/app.js
+@@ -15,6 +15,9 @@ const state = {
+   documents: [],
+   settings: {},
+   settingsLoaded: false,
++  access: { initialized: false, allowed: new Set() },
++  accessLoaded: false,
++  architecture: [],
+   admin: {},
+ };
+ const $ = (selector, root = document) => root.querySelector(selector);
+@@ -53,14 +56,25 @@ function toast(message) {
+   setTimeout(() => el.classList.add('hidden'), 2600);
+ }
+ 
+-function showLogin() { $('#app').classList.add('hidden'); $('#loginPage').classList.remove('hidden'); state.me = null; state.csrf = ''; }
++function showLogin() {
++  $('#app').classList.add('hidden');
++  $('#loginPage').classList.remove('hidden');
++  state.me = null;
++  state.csrf = '';
++  state.access = { initialized: false, allowed: new Set() };
++  state.accessLoaded = false;
++  state.contents = [];
++  state.documents = [];
++  state.architecture = [];
++}
+ function showApp() {
+   $('#loginPage').classList.add('hidden'); $('#app').classList.remove('hidden');
+   $('#sideName').textContent = state.me.displayName || state.me.username;
+-  $('#sideRole').textContent = state.me.role === 'admin' ? 'ADMIN · 기기 제한 없음' : 'GUEST · PC 1 + MOBILE 1';
++  $('#sideRole').textContent = state.me.role === 'admin' ? 'ADMIN · 기기 제한 없음' : 'GUEST · 개별 공개 범위';
+   $('#sessionInfo').textContent = `${state.me.username} · ${deviceInfo().category.toUpperCase()}`;
+   $('#adminNav').classList.toggle('hidden', state.me.role !== 'admin');
+   $('#mobileAdminNav').classList.toggle('hidden', state.me.role !== 'admin');
++  applyNavigationPermissions();
+ }
+ 
+ function hero() {
+@@ -75,6 +89,41 @@ async function loadSettings() {
+   state.settingsLoaded = true;
+ }
+ 
++async function loadAccess() {
++  const data = await api('/api/access');
++  state.access = {
++    initialized: Boolean(data.initialized),
++    allowed: new Set(data.allowed || []),
++  };
++  state.accessLoaded = true;
++}
++
++function canAccess(type, key) {
++  if (state.me?.role === 'admin') return true;
++  return state.access.allowed.has(`${type}:${key}`);
++}
++
++function firstAllowedView() {
++  return ['plans', 'architecture', 'documents'].find((view) => canAccess('menu', view)) || null;
++}
++
++function applyNavigationPermissions() {
++  $$('[data-view]').forEach((element) => {
++    const view = element.dataset.view;
++    if (!view) return;
++    const visible = view === 'admin'
++      ? state.me?.role === 'admin'
++      : canAccess('menu', view);
++    element.classList.toggle('hidden', !visible);
++  });
++}
++
++function showNoAccessiblePage() {
++  state.view = '';
++  $('#viewTitle').textContent = '접근 권한';
++  $('#content').innerHTML = '<div class="error-box">현재 계정에 공개된 메뉴가 없습니다. 관리자에게 공개 범위를 요청하세요.</div>';
++}
++
+ function fallbackPlanLabel(pageKey) {
+   const known = DEFAULT_PLAN_TABS.find((tab) => tab.pageKey === pageKey);
+   return known?.label || pageKey.toUpperCase();
+@@ -147,17 +196,17 @@ async function renderPlans() {
+   $('#content').innerHTML = `${hero()}<div class="page-toolbar"><div class="tabs">${tabButtons}</div>${state.me.role==='admin'?'<button id="initializeContent" class="secondary">기본 내용 시트에 초기화</button>':''}</div><div class="section-list">${sections}</div>`;
+ }
+ 
+-function renderArchitecture() {
+-  const steps = [
+-    ['01','콘텐츠·정보','Indiadesk 피드, 프레스, 세미나, 시행사 고객DB'],
+-    ['02','파트너 선발','20명 유료 선발, IBS 30일 기본과정'],
+-    ['03','기업 유입','기업·제품·오더 등록, 보호정보 승인'],
+-    ['04','시장검증','현장·소비자·가격·패키지·채널 검증'],
+-    ['05','IBS 실행','법인·공장·인증·부동산·쇼룸·현지관리'],
+-    ['06','Ctrl Shift 거래','조건매칭·제안·협상·MOQ·계약·정산'],
+-    ['07','반복수익','수출·리테이너·제휴·구독·고급과정']
+-  ];
+-  $('#content').innerHTML = `${hero()}<div class="page-toolbar"><h2>Full Funnel 아키텍처</h2></div><div class="section-list">${steps.map(([n,t,d])=>`<article class="content-card"><div class="content-card-head"><div><div class="eyebrow">STEP ${n}</div><h3>${t}</h3></div></div><div class="content-card-body"><p>${d}</p></div></article>`).join('')}</div>`;
++async function renderArchitecture() {
++  if (!state.architecture.length) {
++    const data = await api('/api/architecture');
++    state.architecture = data.items || [];
++  }
++
++  const sections = state.architecture.length
++    ? state.architecture.map((item) => `<article class="content-card"><div class="content-card-head"><div><div class="eyebrow">STEP ${escapeHtml(item.number)}</div><h3>${escapeHtml(item.title)}</h3></div></div><div class="content-card-body"><p>${escapeHtml(item.description)}</p></div></article>`).join('')
++    : '<div class="empty-state">현재 계정에 공개된 통합 아키텍처 단계가 없습니다.</div>';
++
++  $('#content').innerHTML = `${hero()}<div class="page-toolbar"><h2>Full Funnel 아키텍처</h2></div><div class="section-list">${sections}</div>`;
+ }
+ 
+ async function renderDocuments() {
+@@ -175,20 +224,35 @@ async function renderAdmin() {
+   if (state.me.role !== 'admin') return navigate('plans');
+   const [accounts, devices, logs] = await Promise.all([api('/api/admin/accounts'), api('/api/admin/devices'), api('/api/admin/logs')]);
+   state.admin = { accounts: accounts.items || [], devices: devices.items || [], logs: logs.items || [] };
+-  const accountRows = state.admin.accounts.map((a) => `<tr><td><span class="status-dot ${escapeHtml(a.status)}"></span>${escapeHtml(a.username)}</td><td>${escapeHtml(a.displayName)}</td><td>${escapeHtml(a.role)}</td><td>${escapeHtml(a.status)}</td><td>${escapeHtml(a.devicePolicy)}</td><td>${a.pcLimit}</td><td>${a.mobileLimit}</td><td><div class="inline-actions"><button class="secondary" data-account-edit="${escapeHtml(a.username)}">설정</button><button class="ghost" data-account-password="${escapeHtml(a.username)}">비밀번호</button></div></td></tr>`).join('');
++  const accountRows = state.admin.accounts.map((a) => {
++    const permissionButton = a.role === 'admin' ? '' : `<button class="ghost" data-account-permissions="${escapeHtml(a.username)}">공개 범위</button>`;
++    return `<tr><td><span class="status-dot ${escapeHtml(a.status)}"></span>${escapeHtml(a.username)}</td><td>${escapeHtml(a.displayName)}</td><td>${escapeHtml(a.role)}</td><td>${escapeHtml(a.status)}</td><td>${escapeHtml(a.devicePolicy)}</td><td>${a.pcLimit}</td><td>${a.mobileLimit}</td><td><div class="inline-actions"><button class="secondary" data-account-edit="${escapeHtml(a.username)}">설정</button><button class="ghost" data-account-password="${escapeHtml(a.username)}">비밀번호</button>${permissionButton}</div></td></tr>`;
++  }).join('');
+   const deviceRows = state.admin.devices.slice().reverse().slice(0,200).map((d) => `<tr><td>${escapeHtml(d.username)}</td><td>${escapeHtml(d.category)}</td><td>${escapeHtml(d.os)}</td><td>${escapeHtml(d.browser)}</td><td>${escapeHtml(d.country)} ${escapeHtml(d.city)}</td><td>${escapeHtml(d.lastIp)}</td><td>${escapeHtml(d.lastSeen)}</td><td>${d.active?'활성':'해제'}</td><td><button class="${d.active?'danger':'secondary'}" data-device-toggle="${escapeHtml(d.deviceId)}" data-device-active="${d.active}">${d.active?'해제':'활성화'}</button></td></tr>`).join('');
+   const logRows = state.admin.logs.slice().reverse().slice(0,200).map((l) => `<tr><td>${escapeHtml(l.timestamp)}</td><td>${escapeHtml(l.username)}</td><td>${escapeHtml(l.event)}</td><td>${l.success?'성공':'실패'}</td><td>${escapeHtml(l.reason)}</td><td>${escapeHtml(l.ip)}</td><td>${escapeHtml(l.country)} ${escapeHtml(l.city)}</td><td>${escapeHtml(l.category)} · ${escapeHtml(l.os)}</td></tr>`).join('');
+   $('#content').innerHTML = `<div class="page-toolbar"><div><h2>관리자</h2><p class="muted">계정·기기·접속기록과 콘텐츠·문서 메타데이터를 관리합니다.</p></div></div><div class="admin-grid"><section class="admin-card"><h3>계정</h3><div class="table-wrap"><table class="admin-table"><thead><tr><th>계정</th><th>표시명</th><th>역할</th><th>상태</th><th>초과정책</th><th>PC</th><th>모바일</th><th>관리</th></tr></thead><tbody>${accountRows}</tbody></table></div></section><section class="admin-card"><h3>등록 기기</h3><div class="table-wrap"><table class="admin-table"><thead><tr><th>계정</th><th>분류</th><th>OS</th><th>브라우저</th><th>국가·도시</th><th>최근 IP</th><th>최근 접속</th><th>상태</th><th>관리</th></tr></thead><tbody>${deviceRows}</tbody></table></div></section><section class="admin-card"><h3>접속 로그</h3><div class="table-wrap"><table class="admin-table"><thead><tr><th>시간</th><th>계정</th><th>이벤트</th><th>결과</th><th>사유</th><th>IP</th><th>국가·도시</th><th>기기</th></tr></thead><tbody>${logRows}</tbody></table></div></section></div>`;
+ }
+ 
+ async function navigate(view) {
++  if (view === 'admin' && state.me?.role !== 'admin') {
++    const fallback = firstAllowedView();
++    if (fallback) return navigate(fallback);
++    return showNoAccessiblePage();
++  }
++
++  if (view !== 'admin' && !canAccess('menu', view)) {
++    const fallback = firstAllowedView();
++    if (fallback && fallback !== view) return navigate(fallback);
++    return showNoAccessiblePage();
++  }
++
+   state.view = view;
+   $$('.nav-button, .mobile-nav button').forEach((el) => el.classList.toggle('active', el.dataset.view === view));
+   $('#viewTitle').textContent = ({plans:'사업계획서',architecture:'통합 아키텍처',documents:'문서 다운로드',admin:'관리자'})[view];
+   $('#content').innerHTML = '<div class="loading">내용을 불러오는 중입니다.</div>';
+   try {
+     if (view === 'plans') await renderPlans();
+-    else if (view === 'architecture') renderArchitecture();
++    else if (view === 'architecture') await renderArchitecture();
+     else if (view === 'documents') await renderDocuments();
+     else if (view === 'admin') await renderAdmin();
+   } catch (error) { $('#content').innerHTML = `<div class="error-box">${escapeHtml(error.message)}</div>`; }
+@@ -214,6 +278,28 @@ function openPasswordEditor(username) {
+   modal(`${username} 비밀번호 설정`, `<form id="passwordEditForm"><input type="hidden" name="username" value="${escapeHtml(username)}"><div class="field"><label>새 비밀번호</label><input type="password" name="password" minlength="10" required></div><div class="field"><label>새 비밀번호 확인</label><input type="password" name="confirm" minlength="10" required></div></form>`, '<button class="ghost" data-close-modal>취소</button><button class="primary" data-save-password>변경</button>');
+ }
+ 
++async function openPermissionsEditor(username) {
++  const data = await api(`/api/admin/permissions?username=${encodeURIComponent(username)}`);
++  state.admin.permissionEditor = data;
++  const allowed = new Set(data.allowed || []);
++
++  const groups = (data.groups || []).map((group) => {
++    const items = group.items.map((item) => `<label class="permission-item"><input type="checkbox" name="permission" value="${escapeHtml(item.id)}" ${item.parentId ? `data-parent-id="${escapeHtml(item.parentId)}"` : ''} ${allowed.has(item.id) ? 'checked' : ''}><span><strong>${escapeHtml(item.label)}</strong>${item.description ? `<small>${escapeHtml(item.description)}</small>` : ''}</span></label>`).join('');
++    return `<section class="permission-group"><div class="permission-group-head"><h4>${escapeHtml(group.label)}</h4><button type="button" class="ghost permission-group-toggle" data-permission-group="${escapeHtml(group.key)}">그룹 전환</button></div><div class="permission-list" data-permission-group-list="${escapeHtml(group.key)}">${items}</div></section>`;
++  }).join('');
++
++  const legacyNotice = data.initialized
++    ? '<div class="success-box">저장된 공개 범위를 적용 중입니다. 새로 추가되는 콘텐츠는 기본 비공개입니다.</div>'
++    : '<div class="error-box">이 계정은 아직 공개 범위를 저장하지 않아 기존처럼 전체 공개 상태입니다. 저장하는 순간부터 선택된 항목만 공개됩니다.</div>';
++
++  modal(
++    `${data.displayName || username} 공개 범위`,
++    `<form id="permissionsForm" class="permission-editor"><input type="hidden" name="username" value="${escapeHtml(username)}">${legacyNotice}<div class="permission-toolbar"><button type="button" class="secondary" data-permission-action="all">전체 선택</button><button type="button" class="ghost" data-permission-action="none">전체 해제</button></div>${groups}</form>`,
++    '<button class="ghost" data-close-modal>취소</button><button class="primary" data-save-permissions>공개 범위 저장</button>',
++  );
++  $('.modal')?.classList.add('modal-wide');
++}
++
+ function openDocumentEditor(id) {
+   const d = state.documents.find((x) => x.id === id);
+   modal('문서 메타데이터 수정', `<form id="documentEditForm"><input type="hidden" name="id" value="${escapeHtml(id)}"><div class="field"><label>문서명</label><input name="title" value="${escapeHtml(d.title)}"></div><div class="field"><label>용도</label><input name="purpose" value="${escapeHtml(d.purpose)}"></div><div class="field"><label>설명</label><textarea name="description" style="min-height:120px">${escapeHtml(d.description)}</textarea></div><div class="field"><label>상태</label><input name="status" value="${escapeHtml(d.status)}"></div><div class="field"><label>파일 URL</label><input name="fileUrl" value="${escapeHtml(d.fileUrl)}"></div><div class="field"><label>버전</label><input name="version" value="${escapeHtml(d.version)}"></div></form>`, '<button class="ghost" data-close-modal>취소</button><button class="primary" data-save-document>저장</button>');
+@@ -227,13 +313,44 @@ $('#loginForm').addEventListener('submit', async (event) => {
+   event.preventDefault(); const msg = $('#loginMessage'); msg.innerHTML = '';
+   try {
+     const data = await api('/api/login', { method: 'POST', body: JSON.stringify({ username: $('#username').value.trim(), password: $('#password').value, device: deviceInfo() }) });
+-    state.me = data.user; state.csrf = data.csrf; showApp(); await navigate('plans');
++    state.me = data.user; state.csrf = data.csrf; await loadAccess(); showApp(); const initialView = firstAllowedView() || (state.me.role === 'admin' ? 'admin' : null); if (initialView) await navigate(initialView); else showNoAccessiblePage();
+   } catch (error) { msg.innerHTML = `<div class="error-box">${escapeHtml(error.message)}</div>`; }
+ });
+ 
+ $('#bootstrapOpen').addEventListener('click', bootstrapModal);
+ $('#logoutButton').addEventListener('click', async () => { try { await api('/api/logout', {method:'POST'}); } finally { showLogin(); } });
+ 
++window.addEventListener('change', (event) => {
++  const input = event.target;
++  if (!(input instanceof HTMLInputElement) || input.name !== 'permission') return;
++
++  const form = input.closest('#permissionsForm');
++  if (!form) return;
++
++  if (input.checked) {
++    let parentId = input.dataset.parentId;
++    while (parentId) {
++      const parent = [...form.querySelectorAll('input[name="permission"]')]
++        .find((candidate) => candidate.value === parentId);
++      if (!parent) break;
++      parent.checked = true;
++      parentId = parent.dataset.parentId;
++    }
++    return;
++  }
++
++  const uncheckChildren = (parentId) => {
++    [...form.querySelectorAll('input[name="permission"]')]
++      .filter((candidate) => candidate.dataset.parentId === parentId)
++      .forEach((child) => {
++        child.checked = false;
++        uncheckChildren(child.value);
++      });
++  };
++
++  uncheckChildren(input.value);
++});
++
+ window.addEventListener('click', async (event) => {
+   const target = event.target.closest('button,a'); if (!target) return;
+   if (target.dataset.view) { event.preventDefault(); return navigate(target.dataset.view); }
+@@ -242,7 +359,20 @@ window.addEventListener('click', async (event) => {
+   if (target.dataset.editContent) return openContentEditor(target.dataset.editContent);
+   if (target.dataset.accountEdit) return openAccountEditor(target.dataset.accountEdit);
+   if (target.dataset.accountPassword) return openPasswordEditor(target.dataset.accountPassword);
++  if (target.dataset.accountPermissions) return openPermissionsEditor(target.dataset.accountPermissions);
+   if (target.dataset.editDocument) return openDocumentEditor(target.dataset.editDocument);
++  if (target.dataset.permissionAction) {
++    const checked = target.dataset.permissionAction === 'all';
++    $$('#permissionsForm input[name="permission"]').forEach((input) => { input.checked = checked; });
++    return;
++  }
++  if (target.dataset.permissionGroup) {
++    const group = target.dataset.permissionGroup;
++    const inputs = $$(`[data-permission-group-list="${CSS.escape(group)}"] input[name="permission"]`);
++    const shouldCheck = inputs.some((input) => !input.checked);
++    inputs.forEach((input) => { input.checked = shouldCheck; });
++    return;
++  }
+   if (target.id === 'initializeContent') {
+     if (!confirm('기본 내용을 Google Sheets Content 탭에 초기화합니다. 기존 동일 섹션은 유지됩니다.')) return;
+     await api('/api/admin/initialize-content', { method:'POST', body:'{}' }); state.contents=[]; toast('기본 내용이 초기화되었습니다.'); return renderPlans();
+@@ -259,6 +389,15 @@ window.addEventListener('click', async (event) => {
+     const payload=Object.fromEntries(new FormData($('#passwordEditForm'))); if(payload.password!==payload.confirm) return alert('비밀번호가 일치하지 않습니다.');
+     await api('/api/admin/accounts',{method:'PUT',body:JSON.stringify({username:payload.username,password:payload.password,status:'active'})}); closeModal(); toast('비밀번호를 설정했습니다.'); return renderAdmin();
+   }
++  if (target.dataset.savePermissions !== undefined) {
++    const form = $('#permissionsForm');
++    const username = form.querySelector('input[name="username"]').value;
++    const allowed = $$('input[name="permission"]:checked', form).map((input) => input.value);
++    await api('/api/admin/permissions', { method: 'PUT', body: JSON.stringify({ username, allowed }) });
++    closeModal();
++    toast('계정별 공개 범위를 저장했습니다.');
++    return renderAdmin();
++  }
+   if (target.dataset.deviceToggle) {
+     await api('/api/admin/devices',{method:'PUT',body:JSON.stringify({deviceId:target.dataset.deviceToggle,active:target.dataset.deviceActive!=='true'})}); toast('기기 상태를 변경했습니다.'); return renderAdmin();
+   }
+@@ -273,6 +412,6 @@ window.addEventListener('click', async (event) => {
+ 
+ (async function start() {
+   try {
+-    const data = await api('/api/me'); state.me = data.user; state.csrf = data.csrf; showApp(); await navigate('plans');
++    const data = await api('/api/me'); state.me = data.user; state.csrf = data.csrf; await loadAccess(); showApp(); const initialView = firstAllowedView() || (state.me.role === 'admin' ? 'admin' : null); if (initialView) await navigate(initialView); else showNoAccessiblePage();
+   } catch { showLogin(); }
+ })();
+diff --git a/public/index.html b/public/index.html
+index 685709c..a30a409 100644
+--- a/public/index.html
++++ b/public/index.html
+@@ -6,6 +6,7 @@
+   <meta name="robots" content="noindex,nofollow,noarchive">
+   <title>India Business Partner Hub</title>
+   <link rel="stylesheet" href="/assets/styles.css">
++  <link rel="stylesheet" href="/assets/access-control.css">
+ </head>
+ <body>
+   <section id="loginPage" class="login-page">
