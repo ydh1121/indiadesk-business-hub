@@ -1,19 +1,20 @@
 .architecture-page-toolbar {
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
 .architecture-page-toolbar > div:first-child {
-  max-width: 780px;
+  max-width: 760px;
 }
 
 .architecture-page-toolbar h2 {
   margin: 0 0 7px;
   color: var(--navy);
+  letter-spacing: -.02em;
 }
 
 .architecture-page-toolbar p {
   margin: 0;
-  line-height: 1.7;
+  line-height: 1.65;
 }
 
 .architecture-toolbar-meta {
@@ -23,34 +24,35 @@
 }
 
 .architecture-toolbar-meta span {
-  padding: 8px 11px;
-  border: 1px solid var(--line);
+  padding: 8px 12px;
+  border: 1px solid #d7e1e5;
   border-radius: 999px;
-  background: #fff;
+  background: rgba(255, 255, 255, .88);
   color: #53636e;
   font-size: 12px;
   font-weight: 800;
+  box-shadow: 0 4px 16px rgba(17, 42, 61, .035);
 }
 
 .architecture-workspace {
   display: grid;
-  grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(320px, 372px) minmax(0, 1fr);
+  gap: 22px;
   align-items: start;
 }
 
 .architecture-tree-panel,
 .architecture-detail-panel {
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: 0 8px 30px rgba(17, 42, 61, .055);
+  border: 1px solid #d9e3e7;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 18px 45px rgba(17, 42, 61, .07);
 }
 
 .architecture-tree-panel {
   position: sticky;
   top: 90px;
-  max-height: calc(100vh - 120px);
+  max-height: calc(100vh - 116px);
   overflow: hidden;
 }
 
@@ -59,21 +61,23 @@
   justify-content: space-between;
   gap: 12px;
   align-items: center;
-  padding: 18px;
-  border-bottom: 1px solid #e9eef1;
-  background: #f8fafb;
+  padding: 18px 19px;
+  border-bottom: 1px solid #e6edf0;
+  background:
+    radial-gradient(circle at 15% 0, rgba(28, 117, 107, .08), transparent 44%),
+    #fbfcfd;
 }
 
 .architecture-tree-head > div {
   display: grid;
-  gap: 4px;
+  gap: 3px;
 }
 
 .architecture-tree-head span {
   color: var(--teal);
   font-size: 10px;
   font-weight: 900;
-  letter-spacing: .12em;
+  letter-spacing: .08em;
 }
 
 .architecture-tree-head strong {
@@ -82,224 +86,383 @@
 }
 
 .architecture-overview-button {
-  border: 1px solid #ccd8de;
-  border-radius: 10px;
-  padding: 8px 10px;
+  border: 1px solid #cad7dc;
+  border-radius: 999px;
+  padding: 8px 12px;
   background: #fff;
-  color: #50616c;
+  color: #53646e;
   font-size: 11px;
   font-weight: 800;
+  transition: .16s ease;
 }
 
+.architecture-overview-button:hover,
 .architecture-overview-button.active {
-  border-color: var(--teal);
-  background: #e9f4f2;
-  color: #1d675f;
+  border-color: rgba(28, 117, 107, .45);
+  background: #edf7f5;
+  color: #1e6b62;
 }
 
 .architecture-tree {
-  max-height: calc(100vh - 195px);
+  max-height: calc(100vh - 190px);
   overflow: auto;
-  padding: 17px 16px 22px;
+  padding: 14px;
+  scrollbar-gutter: stable;
 }
 
-.architecture-branch-list {
+.architecture-phase {
   position: relative;
-  list-style: none;
-  margin: 0;
-  padding: 0;
+  margin-bottom: 12px;
+  padding: 7px;
+  border: 1px solid #dbe5e8;
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(248, 251, 252, .98), rgba(255, 255, 255, .98));
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
 }
 
-.architecture-branch-list .architecture-branch-list {
-  margin-left: 18px;
-  padding-left: 18px;
+.architecture-phase:last-child {
+  margin-bottom: 0;
 }
 
-.architecture-branch-list .architecture-branch-list::before {
-  content: "";
-  position: absolute;
-  left: 2px;
-  top: 0;
-  bottom: 17px;
-  width: 1px;
-  background: #cfd9de;
+.architecture-phase:hover {
+  border-color: #c7d8dd;
 }
 
-.architecture-branch-item {
-  position: relative;
-  margin: 0 0 8px;
+.architecture-phase.active {
+  border-color: rgba(28, 117, 107, .46);
+  box-shadow: 0 8px 24px rgba(28, 117, 107, .08);
 }
 
-.architecture-branch-list .architecture-branch-list > .architecture-branch-item::before {
-  content: "";
-  position: absolute;
-  left: -16px;
-  top: 23px;
-  width: 16px;
-  height: 1px;
-  background: #cfd9de;
-}
-
-.architecture-node {
-  position: relative;
-  width: 100%;
+.architecture-phase-head {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) 18px;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  gap: 7px;
+  align-items: stretch;
+  border-radius: 14px;
+  transition: background .16s ease;
+}
+
+.architecture-phase-head.active {
+  background: #eef7f5;
+}
+
+.architecture-root-node {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 11px;
   align-items: center;
-  border: 1px solid #d9e2e7;
-  border-radius: 13px;
-  padding: 11px;
-  background: #fff;
+  border: 0;
+  border-radius: 14px;
+  padding: 10px 11px;
+  background: transparent;
   color: var(--ink);
   text-align: left;
-  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
 }
 
-.architecture-node:hover {
-  border-color: #9eb5c1;
-  box-shadow: 0 5px 16px rgba(17, 42, 61, .08);
+.architecture-root-node:hover {
+  background: rgba(239, 247, 246, .82);
 }
 
-.architecture-node[data-level="0"] {
-  border-color: #c8d7df;
-  background: #f5f8fa;
-}
-
-.architecture-node.active {
-  border-color: var(--teal);
-  background: #eef7f5;
-  box-shadow: 0 0 0 3px rgba(28, 117, 107, .09);
-}
-
-.architecture-node-number {
+.architecture-root-number {
   display: grid;
   place-items: center;
-  min-height: 34px;
-  border-radius: 9px;
-  background: var(--navy);
+  width: 42px;
+  height: 42px;
+  border-radius: 14px 14px 14px 6px;
+  background:
+    linear-gradient(145deg, #173c55, #0f2e44);
   color: #fff;
   font-size: 11px;
   font-weight: 900;
+  box-shadow: 0 6px 14px rgba(16, 48, 69, .18);
 }
 
-.architecture-node[data-level="1"] .architecture-node-number,
-.architecture-node[data-level="2"] .architecture-node-number {
-  background: #dfe8ec;
-  color: var(--navy);
-}
-
-.architecture-node-copy {
+.architecture-root-copy {
   min-width: 0;
   display: grid;
   gap: 4px;
 }
 
-.architecture-node-copy strong {
+.architecture-root-copy strong {
+  overflow: hidden;
   color: var(--navy);
   font-size: 13px;
   line-height: 1.35;
-}
-
-.architecture-node-copy small {
-  overflow: hidden;
-  color: #71808a;
-  font-size: 10px;
-  line-height: 1.45;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.architecture-node-branch,
-.architecture-node-leaf {
-  color: #91a2ab;
+.architecture-root-copy small {
+  color: #819099;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.architecture-phase-toggle {
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #7f919a;
+  font-size: 17px;
+}
+
+.architecture-phase-toggle:hover {
+  background: rgba(28, 117, 107, .08);
+  color: var(--teal);
+}
+
+.architecture-phase-toggle span {
+  display: block;
+  transition: transform .18s ease;
+}
+
+.architecture-phase-toggle[data-expanded="false"] span {
+  transform: rotate(-90deg);
+}
+
+.architecture-phase-children {
+  margin: 3px 0 4px;
+}
+
+.architecture-child-tree {
+  position: relative;
+  display: grid;
+  gap: 7px;
+  margin: 3px 0 0 38px;
+  padding: 4px 0 1px 21px;
+  list-style: none;
+}
+
+.architecture-child-tree::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 0;
+  bottom: 18px;
+  width: 1px;
+  background: linear-gradient(#bcd1ce, #dce7e9);
+}
+
+.architecture-child-tree > li {
+  position: relative;
+  min-width: 0;
+}
+
+.architecture-child-tree > li::before {
+  content: "";
+  position: absolute;
+  left: -17px;
+  top: 14px;
+  width: 15px;
+  height: 13px;
+  border-left: 1px solid #bfd2cf;
+  border-bottom: 1px solid #bfd2cf;
+  border-bottom-left-radius: 9px;
+}
+
+.architecture-child-tree .architecture-child-tree {
+  margin-left: 24px;
+  padding-left: 17px;
+}
+
+.architecture-child-node {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 8px 38px minmax(0, 1fr) 18px;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  padding: 9px 9px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+
+.architecture-child-node:hover {
+  border-color: #d6e2e5;
+  background: #fff;
+  transform: translateX(2px);
+}
+
+.architecture-child-node.active {
+  border-color: rgba(28, 117, 107, .35);
+  background: #eef7f5;
+}
+
+.architecture-child-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #a6b8bf;
+}
+
+.architecture-child-node.active .architecture-child-dot {
+  background: var(--teal);
+  box-shadow: 0 0 0 4px rgba(28, 117, 107, .10);
+}
+
+.architecture-child-number {
+  color: #5c6e78;
+  font-size: 10px;
   font-weight: 900;
-  text-align: center;
+}
+
+.architecture-child-node strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--navy);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.architecture-child-arrow {
+  color: #9aa9b0;
+  font-size: 12px;
+  opacity: 0;
+  transform: translateX(-3px);
+  transition: opacity .15s ease, transform .15s ease;
+}
+
+.architecture-child-node:hover .architecture-child-arrow,
+.architecture-child-node.active .architecture-child-arrow {
+  opacity: 1;
+  transform: translateX(0);
 }
 
 .architecture-detail-panel {
-  min-height: 620px;
+  min-height: 630px;
   overflow: hidden;
 }
 
 .architecture-detail-head {
+  position: relative;
   display: flex;
   justify-content: space-between;
-  gap: 22px;
+  gap: 24px;
   align-items: flex-start;
-  padding: 28px 30px 24px;
-  border-bottom: 1px solid #e9eef1;
+  padding: 31px 32px 27px;
+  border-bottom: 1px solid #e6edef;
   background:
-    radial-gradient(circle at 100% 0, rgba(28,117,107,.10), transparent 35%),
-    linear-gradient(135deg, #fbfcfd, #f4f7f8);
+    radial-gradient(circle at 92% 4%, rgba(28, 117, 107, .12), transparent 31%),
+    linear-gradient(140deg, #fbfcfd, #f5f8f9);
+}
+
+.architecture-detail-heading {
+  min-width: 0;
 }
 
 .architecture-detail-kicker {
-  margin-bottom: 8px;
+  margin-bottom: 9px;
   color: var(--teal);
   font-size: 10px;
   font-weight: 900;
-  letter-spacing: .12em;
+  letter-spacing: .06em;
 }
 
 .architecture-detail-head h2 {
-  margin: 0 0 10px;
+  margin: 0 0 11px;
   color: var(--navy);
-  font-size: clamp(24px, 3vw, 36px);
-  letter-spacing: -.035em;
+  font-size: clamp(26px, 3vw, 38px);
+  letter-spacing: -.04em;
+  line-height: 1.15;
 }
 
 .architecture-detail-head p {
   max-width: 760px;
   margin: 0;
-  color: #61717b;
+  color: #64757e;
   line-height: 1.75;
 }
 
-.architecture-detail-badge {
+.architecture-detail-mark {
   flex: 0 0 auto;
-  padding: 7px 10px;
-  border: 1px solid rgba(28,117,107,.25);
+  display: grid;
+  justify-items: end;
+  gap: 9px;
+}
+
+.architecture-detail-number {
+  color: rgba(15, 46, 68, .10);
+  font-size: 48px;
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: -.06em;
+}
+
+.architecture-detail-badge {
+  padding: 7px 11px;
+  border: 1px solid rgba(28, 117, 107, .24);
   border-radius: 999px;
-  background: #e9f4f2;
-  color: #236d64;
+  background: rgba(237, 247, 245, .92);
+  color: #216a62;
   font-size: 10px;
   font-weight: 900;
 }
 
-.architecture-parent-link {
-  width: calc(100% - 60px);
-  margin: 20px 30px 0;
+.architecture-breadcrumb {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 7px;
   align-items: center;
-  border: 1px solid #dce5e9;
-  border-radius: 12px;
-  padding: 11px 14px;
-  background: #f8fafb;
-  text-align: left;
+  flex-wrap: wrap;
+  margin: 19px 31px 0;
+  padding: 10px 13px;
+  border: 1px solid #e0e8eb;
+  border-radius: 13px;
+  background: #fafcfd;
 }
 
-.architecture-parent-link span {
-  color: #7a8992;
+.architecture-breadcrumb button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #71818a;
   font-size: 11px;
+  font-weight: 750;
 }
 
-.architecture-parent-link strong {
+.architecture-breadcrumb button:hover,
+.architecture-breadcrumb button[aria-current="page"] {
   color: var(--navy);
-  font-size: 12px;
+}
+
+.architecture-breadcrumb-separator {
+  color: #b1bec4;
+  font-size: 10px;
 }
 
 .architecture-detail-body {
-  padding: 26px 30px 30px;
-  line-height: 1.8;
+  padding: 27px 31px 16px;
+  color: #22323d;
+  line-height: 1.82;
+}
+
+.architecture-detail-body > :first-child {
+  margin-top: 0;
 }
 
 .architecture-detail-body h2,
 .architecture-detail-body h3,
 .architecture-detail-body h4 {
+  margin-top: 28px;
   color: var(--navy);
+  letter-spacing: -.015em;
+}
+
+.architecture-detail-body h3 {
+  font-size: 16px;
+}
+
+.architecture-detail-body h4 {
+  font-size: 14px;
 }
 
 .architecture-detail-body p {
@@ -308,139 +471,266 @@
 
 .architecture-detail-body ul,
 .architecture-detail-body ol {
+  display: grid;
+  gap: 7px;
   padding-left: 22px;
 }
 
 .architecture-detail-body blockquote {
-  margin: 18px 0;
-  padding: 14px 16px;
-  border-left: 4px solid var(--gold);
-  border-radius: 0 12px 12px 0;
+  margin: 21px 0;
+  padding: 15px 17px;
+  border-left: 3px solid #d5972b;
+  border-radius: 0 13px 13px 0;
   background: #fff7e8;
+  color: #43525c;
 }
 
-.architecture-overview-grid,
+.architecture-parent-link {
+  width: calc(100% - 62px);
+  margin: 5px 31px 22px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #dce6e9;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #f8fafb;
+  text-align: left;
+}
+
+.architecture-parent-link:hover {
+  border-color: #bfcfd4;
+  background: #fff;
+}
+
+.architecture-parent-link-label {
+  color: #84939b;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.architecture-parent-link strong {
+  color: var(--navy);
+  font-size: 12px;
+}
+
+.architecture-parent-link > span:last-child {
+  color: var(--teal);
+}
+
+.architecture-child-section {
+  padding: 8px 31px 31px;
+}
+
+.architecture-child-section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: end;
+  margin-bottom: 13px;
+}
+
+.architecture-child-section-head span {
+  color: var(--teal);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.architecture-child-section-head h3 {
+  margin: 4px 0 0;
+  color: var(--navy);
+  font-size: 17px;
+}
+
+.architecture-child-section-head small {
+  color: #87969e;
+  font-size: 11px;
+}
+
 .architecture-child-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 11px;
 }
 
-.architecture-overview-grid {
-  padding: 24px 30px 0;
-}
-
-.architecture-overview-card,
 .architecture-child-card {
+  min-width: 0;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 5px 10px;
-  border: 1px solid #dbe4e8;
-  border-radius: 14px;
-  padding: 14px;
+  grid-template-columns: 42px minmax(0, 1fr) 18px;
+  gap: 11px;
+  align-items: center;
+  border: 1px solid #dde6e9;
+  border-radius: 16px;
+  padding: 13px;
   background: #fff;
   text-align: left;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
 }
 
-.architecture-overview-card:hover,
 .architecture-child-card:hover {
-  border-color: var(--teal);
-  background: #f4faf8;
+  border-color: rgba(28, 117, 107, .36);
+  box-shadow: 0 9px 24px rgba(17, 42, 61, .06);
+  transform: translateY(-1px);
 }
 
-.architecture-overview-card span,
-.architecture-child-card span {
-  grid-row: 1 / span 2;
+.architecture-child-card-number {
   display: grid;
   place-items: center;
-  min-width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  background: var(--navy);
-  color: #fff;
-  font-size: 11px;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px 13px 13px 5px;
+  background: #edf3f5;
+  color: var(--navy);
+  font-size: 10px;
   font-weight: 900;
 }
 
-.architecture-overview-card strong,
-.architecture-child-card strong {
-  color: var(--navy);
-  font-size: 13px;
+.architecture-child-card-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
 }
 
-.architecture-overview-card small,
-.architecture-child-card small {
+.architecture-child-card-copy strong {
   overflow: hidden;
-  color: #72818a;
+  color: var(--navy);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.architecture-child-card-copy small {
+  overflow: hidden;
+  color: #7e8d95;
   font-size: 10px;
   line-height: 1.45;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.architecture-child-section {
-  padding: 0 30px 30px;
+.architecture-child-card-arrow {
+  color: var(--teal);
 }
 
-.architecture-child-section h3 {
-  margin: 0 0 12px;
-  color: var(--navy);
+.architecture-overview-body {
+  padding: 28px 31px 32px;
 }
 
-.architecture-flow-list {
+.architecture-overview-intro {
   display: grid;
-  gap: 8px;
-  margin: 0;
-  padding-left: 0 !important;
-  list-style: none;
-  counter-reset: architecture-flow;
+  grid-template-columns: 105px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 22px;
+  padding: 16px 17px;
+  border-radius: 15px;
+  background: #f6f9fa;
 }
 
-.architecture-flow-list li {
-  counter-increment: architecture-flow;
-  display: grid;
-  grid-template-columns: 34px 180px minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
-  padding: 11px 12px;
-  border: 1px solid #e1e8ec;
-  border-radius: 12px;
-  background: #fafcfd;
-}
-
-.architecture-flow-list li::before {
-  content: counter(architecture-flow, decimal-leading-zero);
+.architecture-overview-intro span {
   color: var(--teal);
   font-size: 11px;
   font-weight: 900;
 }
 
-.architecture-flow-list strong {
-  color: var(--navy);
+.architecture-overview-intro p {
+  margin: 0;
+  color: #62737c;
   font-size: 12px;
+  line-height: 1.7;
 }
 
-.architecture-flow-list span {
-  color: #6d7b84;
+.architecture-roadmap {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.architecture-roadmap::before {
+  content: "";
+  position: absolute;
+  left: 27px;
+  top: 26px;
+  bottom: 26px;
+  width: 2px;
+  background: linear-gradient(var(--teal), #c8d7da);
+}
+
+.architecture-roadmap li {
+  position: relative;
+}
+
+.architecture-roadmap-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) 20px;
+  gap: 14px;
+  align-items: center;
+  border: 1px solid #dde6e9;
+  border-radius: 18px;
+  padding: 14px;
+  background: rgba(255, 255, 255, .98);
+  text-align: left;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.architecture-roadmap-card:hover {
+  border-color: rgba(28, 117, 107, .38);
+  box-shadow: 0 10px 26px rgba(17, 42, 61, .07);
+  transform: translateX(3px);
+}
+
+.architecture-roadmap-number {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border: 4px solid #fff;
+  border-radius: 18px 18px 18px 7px;
+  background: linear-gradient(145deg, #1b745f, #155c50);
+  color: #fff;
   font-size: 11px;
+  font-weight: 950;
+  box-shadow: 0 7px 18px rgba(28, 117, 107, .18);
 }
 
-@media (max-width: 1100px) {
+.architecture-roadmap-copy {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.architecture-roadmap-copy strong {
+  color: var(--navy);
+  font-size: 14px;
+}
+
+.architecture-roadmap-copy small {
+  overflow: hidden;
+  color: #75858e;
+  font-size: 11px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.architecture-roadmap-arrow {
+  color: var(--teal);
+}
+
+@media (max-width: 1120px) {
   .architecture-workspace {
-    grid-template-columns: minmax(285px, 340px) minmax(0, 1fr);
+    grid-template-columns: minmax(290px, 335px) minmax(0, 1fr);
   }
 
-  .architecture-overview-grid,
   .architecture-child-grid {
     grid-template-columns: 1fr;
-  }
-
-  .architecture-flow-list li {
-    grid-template-columns: 30px minmax(0, 1fr);
-  }
-
-  .architecture-flow-list span {
-    grid-column: 2;
   }
 }
 
@@ -455,7 +745,7 @@
   }
 
   .architecture-tree {
-    max-height: 52vh;
+    max-height: 54vh;
   }
 
   .architecture-detail-panel {
@@ -465,35 +755,88 @@
 }
 
 @media (max-width: 620px) {
-  .architecture-tree-head,
-  .architecture-detail-head {
+  .architecture-page-toolbar {
+    align-items: flex-start;
+  }
+
+  .architecture-toolbar-meta {
+    width: 100%;
+  }
+
+  .architecture-toolbar-meta span {
+    flex: 1;
+    text-align: center;
+  }
+
+  .architecture-tree {
+    padding: 11px;
+  }
+
+  .architecture-phase {
+    border-radius: 16px;
+  }
+
+  .architecture-child-tree {
+    margin-left: 28px;
     padding-left: 18px;
-    padding-right: 18px;
   }
 
   .architecture-detail-head {
     display: grid;
     gap: 14px;
+    padding: 24px 20px 21px;
   }
 
-  .architecture-detail-badge {
-    justify-self: start;
+  .architecture-detail-mark {
+    position: absolute;
+    top: 19px;
+    right: 18px;
   }
 
-  .architecture-overview-grid,
+  .architecture-detail-number {
+    display: none;
+  }
+
+  .architecture-detail-head h2 {
+    padding-right: 78px;
+    font-size: 27px;
+  }
+
+  .architecture-breadcrumb {
+    margin: 15px 19px 0;
+  }
+
   .architecture-detail-body,
+  .architecture-overview-body,
   .architecture-child-section {
-    padding-left: 18px;
-    padding-right: 18px;
+    padding-left: 19px;
+    padding-right: 19px;
   }
 
   .architecture-parent-link {
-    width: calc(100% - 36px);
-    margin-left: 18px;
-    margin-right: 18px;
+    width: calc(100% - 38px);
+    margin-left: 19px;
+    margin-right: 19px;
   }
 
-  .architecture-node-copy small {
+  .architecture-overview-intro {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+
+  .architecture-roadmap-card {
+    grid-template-columns: 48px minmax(0, 1fr) 16px;
+    gap: 11px;
+    padding: 11px;
+  }
+
+  .architecture-roadmap-number {
+    width: 48px;
+    height: 48px;
+  }
+
+  .architecture-roadmap-copy small,
+  .architecture-child-card-copy small {
     white-space: normal;
     display: -webkit-box;
     -webkit-line-clamp: 2;

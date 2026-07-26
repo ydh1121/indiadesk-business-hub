@@ -4,6 +4,8 @@ const OVERVIEW_KEY = '__architecture_overview__';
 
 let currentItems = [];
 let currentSelectedKey = OVERVIEW_KEY;
+let expandedKeys = new Set();
+let delegationBound = false;
 
 function numberValue(value) {
   const parsed = Number(value);
@@ -55,52 +57,196 @@ function childrenMap(items) {
   return map;
 }
 
-function shortSummary(markdown = '') {
+function normalizedText(value = '') {
+  return String(value)
+    .replace(/\*\*/g, '')
+    .replace(/^>\s*/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function summaryText(markdown = '') {
   const lines = String(markdown)
+    .replaceAll('\r\n', '\n')
+    .replaceAll('\r', '\n')
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
     .filter((line) => !line.startsWith('#'))
     .filter((line) => !line.startsWith('>'))
     .filter((line) => !line.startsWith('|'))
-    .filter((line) => !/^[-*]\s+/.test(line));
+    .filter((line) => !/^[-*]\s+/.test(line))
+    .filter((line) => !/^\d+\.\s+/.test(line))
+    .filter((line) => !/^\*\*[^*]+\*\*$/.test(line));
 
-  return lines[0]?.replace(/\*\*/g, '') || '세부 내용을 선택해 확인합니다.';
+  return normalizedText(lines[0] || '선택한 구조의 역할과 실행 흐름을 확인합니다.');
 }
 
-function nodeButton(item, level) {
-  const hasChildren = currentItems.some((candidate) => candidate.parentKey === item.key);
+function stripLeadingSummary(markdown = '', summary = '') {
+  const lines = String(markdown)
+    .replaceAll('\r\n', '\n')
+    .replaceAll('\r', '\n')
+    .split('\n');
+
+  const firstContentIndex = lines.findIndex((line) => line.trim());
+  if (firstContentIndex < 0) return '';
+
+  const firstLine = normalizedText(lines[firstContentIndex]);
+  if (firstLine !== normalizedText(summary)) return lines.join('\n');
+
+  lines.splice(firstContentIndex, 1);
+  while (lines[firstContentIndex] !== undefined && !lines[firstContentIndex].trim()) {
+    lines.splice(firstContentIndex, 1);
+  }
+
+  return lines.join('\n').trim();
+}
+
+function rootKeyFor(key = '') {
+  return String(key).split('/')[0];
+}
+
+function ancestorKeys(key = '') {
+  const keys = [];
+  let current = parentKeyOf(key);
+
+  while (current) {
+    keys.unshift(current);
+    current = parentKeyOf(current);
+  }
+
+  return keys;
+}
+
+function childCount(key) {
+  return currentItems.filter((item) => item.parentKey === key).length;
+}
+
+function rootNode(item, hasChildren, isExpanded) {
+  const active = currentSelectedKey === item.key;
+
+  return `
+    <div class="architecture-phase-head ${active ? 'active' : ''}">
+      <button
+        type="button"
+        class="architecture-root-node"
+        data-architecture-node="${escapeHtml(item.key)}"
+        aria-selected="${active ? 'true' : 'false'}"
+      >
+        <span class="architecture-root-number">${escapeHtml(item.number || '·')}</span>
+        <span class="architecture-root-copy">
+          <strong>${escapeHtml(item.title)}</strong>
+          <small>${hasChildren ? `${childCount(item.key)}개 세부 구조` : '단일 구조'}</small>
+        </span>
+      </button>
+
+      ${hasChildren ? `
+        <button
+          type="button"
+          class="architecture-phase-toggle"
+          data-architecture-toggle="${escapeHtml(item.key)}"
+          data-expanded="${isExpanded ? 'true' : 'false'}"
+          aria-expanded="${isExpanded ? 'true' : 'false'}"
+          aria-label="${escapeHtml(item.title)} 하위 구조 ${isExpanded ? '접기' : '펼치기'}"
+        >
+          <span>⌄</span>
+        </button>
+      ` : ''}
+    </div>
+  `;
+}
+
+function childNode(item, depth) {
+  const active = currentSelectedKey === item.key;
+
   return `
     <button
       type="button"
-      class="architecture-node ${currentSelectedKey === item.key ? 'active' : ''}"
+      class="architecture-child-node ${active ? 'active' : ''}"
       data-architecture-node="${escapeHtml(item.key)}"
-      data-level="${level}"
-      aria-selected="${currentSelectedKey === item.key ? 'true' : 'false'}"
+      data-depth="${depth}"
+      aria-selected="${active ? 'true' : 'false'}"
     >
-      <span class="architecture-node-number">${escapeHtml(item.number || '·')}</span>
-      <span class="architecture-node-copy">
-        <strong>${escapeHtml(item.title)}</strong>
-        <small>${escapeHtml(shortSummary(item.description))}</small>
-      </span>
-      ${hasChildren ? '<span class="architecture-node-branch">+</span>' : '<span class="architecture-node-leaf">•</span>'}
+      <span class="architecture-child-dot" aria-hidden="true"></span>
+      <span class="architecture-child-number">${escapeHtml(item.number || '·')}</span>
+      <strong>${escapeHtml(item.title)}</strong>
+      <span class="architecture-child-arrow" aria-hidden="true">→</span>
     </button>
   `;
 }
 
-function renderBranch(parentKey, map, level = 0) {
+function renderNestedChildren(parentKey, map, depth = 1) {
   const children = map.get(parentKey) || [];
   if (!children.length) return '';
 
   return `
-    <ul class="architecture-branch-list" data-depth="${level}">
+    <ul class="architecture-child-tree" data-depth="${depth}">
       ${children.map((item) => `
-        <li class="architecture-branch-item">
-          ${nodeButton(item, level)}
-          ${renderBranch(item.key, map, level + 1)}
+        <li>
+          ${childNode(item, depth)}
+          ${renderNestedChildren(item.key, map, depth + 1)}
         </li>
       `).join('')}
     </ul>
+  `;
+}
+
+function renderPhase(item, map) {
+  const children = map.get(item.key) || [];
+  const hasChildren = children.length > 0;
+  const isExpanded = expandedKeys.has(item.key);
+
+  return `
+    <section class="architecture-phase ${currentSelectedKey === item.key ? 'active' : ''}">
+      ${rootNode(item, hasChildren, isExpanded)}
+      ${hasChildren && isExpanded ? `
+        <div class="architecture-phase-children">
+          ${renderNestedChildren(item.key, map)}
+        </div>
+      ` : ''}
+    </section>
+  `;
+}
+
+function renderTreeHtml() {
+  const map = childrenMap(currentItems);
+  const roots = map.get('') || [];
+
+  return roots.map((item) => renderPhase(item, map)).join('');
+}
+
+function pathItems(item, items) {
+  const map = itemMap(items);
+  const path = [];
+  let current = item;
+
+  while (current) {
+    path.unshift(current);
+    current = current.parentKey ? map.get(current.parentKey) : null;
+  }
+
+  return path;
+}
+
+function detailHeader({
+  kicker,
+  title,
+  summary,
+  badge,
+  number = '',
+}) {
+  return `
+    <header class="architecture-detail-head">
+      <div class="architecture-detail-heading">
+        <div class="architecture-detail-kicker">${escapeHtml(kicker)}</div>
+        <h2>${escapeHtml(title)}</h2>
+        ${summary ? `<p>${escapeHtml(summary)}</p>` : ''}
+      </div>
+      <div class="architecture-detail-mark">
+        ${number ? `<span class="architecture-detail-number">${escapeHtml(number)}</span>` : ''}
+        <span class="architecture-detail-badge">${escapeHtml(badge)}</span>
+      </div>
+    </header>
   `;
 }
 
@@ -108,34 +254,37 @@ function overviewDetail(items) {
   const roots = childrenMap(items).get('') || [];
 
   return `
-    <div class="architecture-detail-head">
-      <div>
-        <div class="architecture-detail-kicker">INTEGRATED BUSINESS ARCHITECTURE</div>
-        <h2>인도진출 통합사업 운영 구조</h2>
-        <p>콘텐츠 유입부터 파트너 교육, 기업 등록, 시장검증, IBS 현지 실행, 양방향 거래와 반복수익까지 하나의 흐름으로 관리합니다.</p>
+    ${detailHeader({
+      kicker: '사업 운영 전체 흐름',
+      title: '인도진출 통합사업 운영 구조',
+      summary: '기업 유입부터 파트너 교육, 시장검증, 현지 실행, 거래와 반복수익까지 한 흐름으로 연결합니다.',
+      badge: '전체 구조',
+    })}
+
+    <div class="architecture-overview-body">
+      <div class="architecture-overview-intro">
+        <span>운영 흐름</span>
+        <p>각 단계는 독립된 메뉴가 아니라 앞 단계의 결과가 다음 단계의 실행조건이 되는 연속 구조입니다.</p>
       </div>
-      <span class="architecture-detail-badge">전체 구조</span>
-    </div>
 
-    <div class="architecture-overview-grid">
-      ${roots.map((item) => `
-        <button type="button" class="architecture-overview-card" data-architecture-node="${escapeHtml(item.key)}">
-          <span>${escapeHtml(item.number)}</span>
-          <strong>${escapeHtml(item.title)}</strong>
-          <small>${escapeHtml(shortSummary(item.description))}</small>
-        </button>
-      `).join('')}
-    </div>
-
-    <div class="architecture-detail-body">
-      <h3>전체 흐름</h3>
-      <ol class="architecture-flow-list">
-        ${roots.map((item) => `<li><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(shortSummary(item.description))}</span></li>`).join('')}
+      <ol class="architecture-roadmap">
+        ${roots.map((item, index) => `
+          <li>
+            <button
+              type="button"
+              class="architecture-roadmap-card"
+              data-architecture-node="${escapeHtml(item.key)}"
+            >
+              <span class="architecture-roadmap-number">${escapeHtml(item.number || String(index + 1).padStart(2, '0'))}</span>
+              <span class="architecture-roadmap-copy">
+                <strong>${escapeHtml(item.title)}</strong>
+                <small>${escapeHtml(summaryText(item.description))}</small>
+              </span>
+              <span class="architecture-roadmap-arrow" aria-hidden="true">→</span>
+            </button>
+          </li>
+        `).join('')}
       </ol>
-
-      <blockquote>
-        각 단계는 Google Sheets의 Architecture 탭에서 관리하며, 계정별 공개 범위에 따라 허용된 노드만 표시됩니다.
-      </blockquote>
     </div>
   `;
 }
@@ -144,45 +293,78 @@ function itemDetail(item, items) {
   const map = itemMap(items);
   const childItems = items
     .filter((candidate) => candidate.parentKey === item.key)
-    .sort((a, b) => a.sortOrder - b.sortOrder);
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, 'ko'));
 
   const parent = item.parentKey ? map.get(item.parentKey) : null;
-  const levelLabel = item.parentKey ? '세부 구조' : '핵심 사업 단계';
+  const summary = summaryText(item.description);
+  const bodyMarkdown = stripLeadingSummary(item.description, summary);
+  const path = pathItems(item, items);
 
   return `
-    <div class="architecture-detail-head">
-      <div>
-        <div class="architecture-detail-kicker">${escapeHtml(levelLabel)} · ${escapeHtml(item.number || '')}</div>
-        <h2>${escapeHtml(item.title)}</h2>
-        <p>${escapeHtml(shortSummary(item.description))}</p>
-      </div>
-      <span class="architecture-detail-badge">${item.parentKey ? 'DETAIL' : 'CORE'}</span>
+    ${detailHeader({
+      kicker: item.parentKey ? '세부 실행 구조' : '핵심 사업 단계',
+      title: item.title,
+      summary,
+      badge: item.parentKey ? '세부 구조' : '핵심 단계',
+      number: item.number,
+    })}
+
+    <div class="architecture-breadcrumb" aria-label="현재 위치">
+      ${path.map((pathItem, index) => `
+        ${index ? '<span class="architecture-breadcrumb-separator">/</span>' : ''}
+        <button
+          type="button"
+          data-architecture-node="${escapeHtml(pathItem.key)}"
+          ${pathItem.key === item.key ? 'aria-current="page"' : ''}
+        >${escapeHtml(pathItem.title)}</button>
+      `).join('')}
     </div>
 
+    ${bodyMarkdown ? `
+      <div class="architecture-detail-body">
+        ${renderMarkdownSafe(bodyMarkdown)}
+      </div>
+    ` : ''}
+
     ${parent ? `
-      <button type="button" class="architecture-parent-link" data-architecture-node="${escapeHtml(parent.key)}">
-        <span>상위 구조</span>
+      <button
+        type="button"
+        class="architecture-parent-link"
+        data-architecture-node="${escapeHtml(parent.key)}"
+      >
+        <span class="architecture-parent-link-label">상위 단계</span>
         <strong>${escapeHtml(parent.number)} · ${escapeHtml(parent.title)}</strong>
+        <span aria-hidden="true">↑</span>
       </button>
     ` : ''}
 
-    <div class="architecture-detail-body">
-      ${renderMarkdownSafe(item.description)}
-    </div>
-
     ${childItems.length ? `
-      <div class="architecture-child-section">
-        <h3>하위 구성</h3>
+      <section class="architecture-child-section">
+        <div class="architecture-child-section-head">
+          <div>
+            <span>다음으로 확인할 구조</span>
+            <h3>하위 구성</h3>
+          </div>
+          <small>${childItems.length}개 항목</small>
+        </div>
+
         <div class="architecture-child-grid">
           ${childItems.map((child) => `
-            <button type="button" class="architecture-child-card" data-architecture-node="${escapeHtml(child.key)}">
-              <span>${escapeHtml(child.number)}</span>
-              <strong>${escapeHtml(child.title)}</strong>
-              <small>${escapeHtml(shortSummary(child.description))}</small>
+            <button
+              type="button"
+              class="architecture-child-card"
+              data-architecture-node="${escapeHtml(child.key)}"
+            >
+              <span class="architecture-child-card-number">${escapeHtml(child.number)}</span>
+              <span class="architecture-child-card-copy">
+                <strong>${escapeHtml(child.title)}</strong>
+                <small>${escapeHtml(summaryText(child.description))}</small>
+              </span>
+              <span class="architecture-child-card-arrow" aria-hidden="true">→</span>
             </button>
           `).join('')}
         </div>
-      </div>
+      </section>
     ` : ''}
   `;
 }
@@ -193,8 +375,42 @@ function detailHtml(key) {
   return item ? itemDetail(item, currentItems) : overviewDetail(currentItems);
 }
 
+function refreshTree() {
+  const tree = document.querySelector('#architectureTreeNav');
+  if (!tree) return;
+
+  const previousScroll = tree.scrollTop;
+  tree.innerHTML = renderTreeHtml();
+  tree.scrollTop = previousScroll;
+
+  const overviewButton = document.querySelector('[data-architecture-node="__architecture_overview__"]');
+  overviewButton?.classList.toggle('active', currentSelectedKey === OVERVIEW_KEY);
+}
+
+function bindDelegation() {
+  if (delegationBound) return;
+  delegationBound = true;
+
+  document.addEventListener('click', (event) => {
+    const toggle = event.target.closest('[data-architecture-toggle]');
+    if (!toggle) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const key = toggle.dataset.architectureToggle;
+    if (!key) return;
+
+    if (expandedKeys.has(key)) expandedKeys.delete(key);
+    else expandedKeys.add(key);
+
+    refreshTree();
+  });
+}
+
 export function renderArchitectureWorkspace(items = [], heroHtml = '') {
   currentItems = normalizedItems(items);
+  bindDelegation();
 
   if (!currentItems.some((item) => item.key === currentSelectedKey)) {
     currentSelectedKey = OVERVIEW_KEY;
@@ -205,6 +421,11 @@ export function renderArchitectureWorkspace(items = [], heroHtml = '') {
   }
 
   const map = childrenMap(currentItems);
+  const roots = map.get('') || [];
+
+  if (!expandedKeys.size && roots[0]) {
+    expandedKeys.add(roots[0].key);
+  }
 
   return `
     ${heroHtml}
@@ -212,11 +433,12 @@ export function renderArchitectureWorkspace(items = [], heroHtml = '') {
     <div class="page-toolbar architecture-page-toolbar">
       <div>
         <h2>통합 아키텍처</h2>
-        <p class="muted">좌측 트리에서 사업 단계나 세부 구조를 선택하면 우측에서 역할, 진행 흐름, 참여 주체와 수익 연결을 확인할 수 있습니다.</p>
+        <p class="muted">단계를 선택하면 역할, 실행 흐름, 참여 주체와 수익 연결을 오른쪽에서 확인할 수 있습니다.</p>
       </div>
+
       <div class="architecture-toolbar-meta">
-        <span>${map.get('')?.length || 0}개 핵심 단계</span>
-        <span>${currentItems.length}개 공개 노드</span>
+        <span>${roots.length}개 핵심 단계</span>
+        <span>${currentItems.length}개 공개 구조</span>
       </div>
     </div>
 
@@ -224,18 +446,23 @@ export function renderArchitectureWorkspace(items = [], heroHtml = '') {
       <aside class="architecture-tree-panel">
         <div class="architecture-tree-head">
           <div>
-            <span>BUSINESS TREE</span>
-            <strong>사업 구조 탐색</strong>
+            <span>사업 구조</span>
+            <strong>단계별 탐색</strong>
           </div>
+
           <button
             type="button"
             class="architecture-overview-button ${currentSelectedKey === OVERVIEW_KEY ? 'active' : ''}"
             data-architecture-node="${OVERVIEW_KEY}"
-          >전체 보기</button>
+          >전체 흐름</button>
         </div>
 
-        <nav class="architecture-tree" aria-label="통합 아키텍처 계층 구조">
-          ${renderBranch('', map)}
+        <nav
+          id="architectureTreeNav"
+          class="architecture-tree"
+          aria-label="통합 아키텍처 계층 구조"
+        >
+          ${renderTreeHtml()}
         </nav>
       </aside>
 
@@ -255,13 +482,16 @@ export function activateArchitectureNode(key) {
 
   currentSelectedKey = key;
 
-  document.querySelectorAll('[data-architecture-node]').forEach((element) => {
-    const active = element.dataset.architectureNode === key;
-    element.classList.toggle('active', active);
-    if (element.classList.contains('architecture-node')) {
-      element.setAttribute('aria-selected', active ? 'true' : 'false');
+  if (key !== OVERVIEW_KEY) {
+    const rootKey = rootKeyFor(key);
+    expandedKeys.add(rootKey);
+
+    for (const ancestorKey of ancestorKeys(key)) {
+      expandedKeys.add(ancestorKey);
     }
-  });
+  }
+
+  refreshTree();
 
   const detail = document.querySelector('#architectureDetail');
   if (detail) detail.innerHTML = detailHtml(key);
