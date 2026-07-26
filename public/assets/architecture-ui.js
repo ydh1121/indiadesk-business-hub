@@ -368,6 +368,8 @@ function itemDetail(item, items) {
         </div>
       </section>
     ` : ''}
+
+    ${readerNavigation(item.key)}
   `;
 }
 
