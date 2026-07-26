@@ -1,0 +1,825 @@
+diff --git a/public/index.html b/public/index.html
+--- a/public/index.html
++++ b/public/index.html
+@@ -9,5 +9,6 @@
+   <title>India Business Partner Hub</title>
+   <link rel="stylesheet" href="/assets/styles.css">
+   <link rel="stylesheet" href="/assets/access-control.css">
++  <link rel="stylesheet" href="/assets/architecture.css">
+ </head>
+ <body>
+diff --git a/public/assets/app.js b/public/assets/app.js
+--- a/public/assets/app.js
++++ b/public/assets/app.js
+@@ -1,3 +1,4 @@
+ import { renderMarkdownSafe, escapeHtml } from './markdown.js';
++import { renderArchitectureWorkspace, activateArchitectureNode } from './architecture-ui.js';
+ 
+ const DEFAULT_PLAN_TABS = [
+@@ -199,14 +200,9 @@
+ }
+ 
+ async function renderArchitecture() {
+   if (!state.architecture.length) {
+     const data = await api('/api/architecture');
+     state.architecture = data.items || [];
+   }
+-
+-  const sections = state.architecture.length
+-    ? state.architecture.map((item) => `<article class="content-card"><div class="content-card-head"><div><div class="eyebrow">STEP ${escapeHtml(item.number)}</div><h3>${escapeHtml(item.title)}</h3></div></div><div class="content-card-body"><p>${escapeHtml(item.description)}</p></div></article>`).join('')
+-    : '<div class="empty-state">현재 계정에 공개된 통합 아키텍처 단계가 없습니다.</div>';
+-
+-  $('#content').innerHTML = `${hero()}<div class="page-toolbar"><h2>Full Funnel 아키텍처</h2></div><div class="section-list">${sections}</div>`;
++  $('#content').innerHTML = renderArchitectureWorkspace(state.architecture, hero());
+ }
+@@ -357,5 +353,6 @@
+   const target = event.target.closest('button,a'); if (!target) return;
+   if (target.dataset.view) { event.preventDefault(); return navigate(target.dataset.view); }
+   if (target.dataset.version) { state.version = target.dataset.version; return renderPlans(); }
++  if (target.dataset.architectureNode) return activateArchitectureNode(target.dataset.architectureNode);
+   if (target.dataset.closeModal !== undefined) return closeModal();
+   if (target.dataset.editContent) return openContentEditor(target.dataset.editContent);
+diff --git a/public/assets/architecture-ui.js b/public/assets/architecture-ui.js
+new file mode 100644
+--- /dev/null
++++ b/public/assets/architecture-ui.js
+@@ -0,0 +1,272 @@
++import { renderMarkdownSafe, escapeHtml } from './markdown.js';
++
++const OVERVIEW_KEY = '__architecture_overview__';
++
++let currentItems = [];
++let currentSelectedKey = OVERVIEW_KEY;
++
++function numberValue(value) {
++  const parsed = Number(value);
++  return Number.isFinite(parsed) ? parsed : 0;
++}
++
++function parentKeyOf(key = '') {
++  const normalized = String(key);
++  const separator = normalized.lastIndexOf('/');
++  return separator > 0 ? normalized.slice(0, separator) : '';
++}
++
++function normalizedItems(items = []) {
++  return items
++    .filter((item) => item && item.key)
++    .map((item) => ({
++      ...item,
++      key: String(item.key),
++      number: String(item.number || ''),
++      title: String(item.title || item.key),
++      description: String(item.description || ''),
++      sortOrder: numberValue(item.sortOrder),
++      parentKey: parentKeyOf(item.key),
++    }))
++    .sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, 'ko'));
++}
++
++function itemMap(items) {
++  return new Map(items.map((item) => [item.key, item]));
++}
++
++function childrenMap(items) {
++  const map = new Map();
++  const keys = new Set(items.map((item) => item.key));
++
++  for (const item of items) {
++    const parentKey = item.parentKey && keys.has(item.parentKey)
++      ? item.parentKey
++      : '';
++
++    if (!map.has(parentKey)) map.set(parentKey, []);
++    map.get(parentKey).push(item);
++  }
++
++  for (const children of map.values()) {
++    children.sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, 'ko'));
++  }
++
++  return map;
++}
++
++function shortSummary(markdown = '') {
++  const lines = String(markdown)
++    .split('\n')
++    .map((line) => line.trim())
++    .filter(Boolean)
++    .filter((line) => !line.startsWith('#'))
++    .filter((line) => !line.startsWith('>'))
++    .filter((line) => !line.startsWith('|'))
++    .filter((line) => !/^[-*]\s+/.test(line));
++
++  return lines[0]?.replace(/\*\*/g, '') || '세부 내용을 선택해 확인합니다.';
++}
++
++function nodeButton(item, level) {
++  const hasChildren = currentItems.some((candidate) => candidate.parentKey === item.key);
++  return `
++    <button
++      type="button"
++      class="architecture-node ${currentSelectedKey === item.key ? 'active' : ''}"
++      data-architecture-node="${escapeHtml(item.key)}"
++      data-level="${level}"
++      aria-selected="${currentSelectedKey === item.key ? 'true' : 'false'}"
++    >
++      <span class="architecture-node-number">${escapeHtml(item.number || '·')}</span>
++      <span class="architecture-node-copy">
++        <strong>${escapeHtml(item.title)}</strong>
++        <small>${escapeHtml(shortSummary(item.description))}</small>
++      </span>
++      ${hasChildren ? '<span class="architecture-node-branch">+</span>' : '<span class="architecture-node-leaf">•</span>'}
++    </button>
++  `;
++}
++
++function renderBranch(parentKey, map, level = 0) {
++  const children = map.get(parentKey) || [];
++  if (!children.length) return '';
++
++  return `
++    <ul class="architecture-branch-list" data-depth="${level}">
++      ${children.map((item) => `
++        <li class="architecture-branch-item">
++          ${nodeButton(item, level)}
++          ${renderBranch(item.key, map, level + 1)}
++        </li>
++      `).join('')}
++    </ul>
++  `;
++}
++
++function overviewDetail(items) {
++  const roots = childrenMap(items).get('') || [];
++
++  return `
++    <div class="architecture-detail-head">
++      <div>
++        <div class="architecture-detail-kicker">INTEGRATED BUSINESS ARCHITECTURE</div>
++        <h2>인도진출 통합사업 운영 구조</h2>
++        <p>콘텐츠 유입부터 파트너 교육, 기업 등록, 시장검증, IBS 현지 실행, 양방향 거래와 반복수익까지 하나의 흐름으로 관리합니다.</p>
++      </div>
++      <span class="architecture-detail-badge">전체 구조</span>
++    </div>
++
++    <div class="architecture-overview-grid">
++      ${roots.map((item) => `
++        <button type="button" class="architecture-overview-card" data-architecture-node="${escapeHtml(item.key)}">
++          <span>${escapeHtml(item.number)}</span>
++          <strong>${escapeHtml(item.title)}</strong>
++          <small>${escapeHtml(shortSummary(item.description))}</small>
++        </button>
++      `).join('')}
++    </div>
++
++    <div class="architecture-detail-body">
++      <h3>전체 흐름</h3>
++      <ol class="architecture-flow-list">
++        ${roots.map((item) => `<li><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(shortSummary(item.description))}</span></li>`).join('')}
++      </ol>
++
++      <blockquote>
++        각 단계는 Google Sheets의 Architecture 탭에서 관리하며, 계정별 공개 범위에 따라 허용된 노드만 표시됩니다.
++      </blockquote>
++    </div>
++  `;
++}
++
++function itemDetail(item, items) {
++  const map = itemMap(items);
++  const childItems = items
++    .filter((candidate) => candidate.parentKey === item.key)
++    .sort((a, b) => a.sortOrder - b.sortOrder);
++
++  const parent = item.parentKey ? map.get(item.parentKey) : null;
++  const levelLabel = item.parentKey ? '세부 구조' : '핵심 사업 단계';
++
++  return `
++    <div class="architecture-detail-head">
++      <div>
++        <div class="architecture-detail-kicker">${escapeHtml(levelLabel)} · ${escapeHtml(item.number || '')}</div>
++        <h2>${escapeHtml(item.title)}</h2>
++        <p>${escapeHtml(shortSummary(item.description))}</p>
++      </div>
++      <span class="architecture-detail-badge">${item.parentKey ? 'DETAIL' : 'CORE'}</span>
++    </div>
++
++    ${parent ? `
++      <button type="button" class="architecture-parent-link" data-architecture-node="${escapeHtml(parent.key)}">
++        <span>상위 구조</span>
++        <strong>${escapeHtml(parent.number)} · ${escapeHtml(parent.title)}</strong>
++      </button>
++    ` : ''}
++
++    <div class="architecture-detail-body">
++      ${renderMarkdownSafe(item.description)}
++    </div>
++
++    ${childItems.length ? `
++      <div class="architecture-child-section">
++        <h3>하위 구성</h3>
++        <div class="architecture-child-grid">
++          ${childItems.map((child) => `
++            <button type="button" class="architecture-child-card" data-architecture-node="${escapeHtml(child.key)}">
++              <span>${escapeHtml(child.number)}</span>
++              <strong>${escapeHtml(child.title)}</strong>
++              <small>${escapeHtml(shortSummary(child.description))}</small>
++            </button>
++          `).join('')}
++        </div>
++      </div>
++    ` : ''}
++  `;
++}
++
++function detailHtml(key) {
++  if (key === OVERVIEW_KEY) return overviewDetail(currentItems);
++  const item = currentItems.find((candidate) => candidate.key === key);
++  return item ? itemDetail(item, currentItems) : overviewDetail(currentItems);
++}
++
++export function renderArchitectureWorkspace(items = [], heroHtml = '') {
++  currentItems = normalizedItems(items);
++
++  if (!currentItems.some((item) => item.key === currentSelectedKey)) {
++    currentSelectedKey = OVERVIEW_KEY;
++  }
++
++  if (!currentItems.length) {
++    return `${heroHtml}<div class="empty-state">현재 계정에 공개된 통합 아키텍처 단계가 없습니다.</div>`;
++  }
++
++  const map = childrenMap(currentItems);
++
++  return `
++    ${heroHtml}
++
++    <div class="page-toolbar architecture-page-toolbar">
++      <div>
++        <h2>통합 아키텍처</h2>
++        <p class="muted">좌측 트리에서 사업 단계나 세부 구조를 선택하면 우측에서 역할, 진행 흐름, 참여 주체와 수익 연결을 확인할 수 있습니다.</p>
++      </div>
++      <div class="architecture-toolbar-meta">
++        <span>${map.get('')?.length || 0}개 핵심 단계</span>
++        <span>${currentItems.length}개 공개 노드</span>
++      </div>
++    </div>
++
++    <section class="architecture-workspace">
++      <aside class="architecture-tree-panel">
++        <div class="architecture-tree-head">
++          <div>
++            <span>BUSINESS TREE</span>
++            <strong>사업 구조 탐색</strong>
++          </div>
++          <button
++            type="button"
++            class="architecture-overview-button ${currentSelectedKey === OVERVIEW_KEY ? 'active' : ''}"
++            data-architecture-node="${OVERVIEW_KEY}"
++          >전체 보기</button>
++        </div>
++
++        <nav class="architecture-tree" aria-label="통합 아키텍처 계층 구조">
++          ${renderBranch('', map)}
++        </nav>
++      </aside>
++
++      <article id="architectureDetail" class="architecture-detail-panel">
++        ${detailHtml(currentSelectedKey)}
++      </article>
++    </section>
++  `;
++}
++
++export function activateArchitectureNode(key) {
++  if (!key) return;
++
++  if (key !== OVERVIEW_KEY && !currentItems.some((item) => item.key === key)) {
++    return;
++  }
++
++  currentSelectedKey = key;
++
++  document.querySelectorAll('[data-architecture-node]').forEach((element) => {
++    const active = element.dataset.architectureNode === key;
++    element.classList.toggle('active', active);
++    if (element.classList.contains('architecture-node')) {
++      element.setAttribute('aria-selected', active ? 'true' : 'false');
++    }
++  });
++
++  const detail = document.querySelector('#architectureDetail');
++  if (detail) detail.innerHTML = detailHtml(key);
++
++  if (window.matchMedia('(max-width: 980px)').matches && detail) {
++    detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
++  }
++}
+diff --git a/public/assets/architecture.css b/public/assets/architecture.css
+new file mode 100644
+--- /dev/null
++++ b/public/assets/architecture.css
+@@ -0,0 +1,502 @@
++.architecture-page-toolbar {
++  margin-bottom: 18px;
++}
++
++.architecture-page-toolbar > div:first-child {
++  max-width: 780px;
++}
++
++.architecture-page-toolbar h2 {
++  margin: 0 0 7px;
++  color: var(--navy);
++}
++
++.architecture-page-toolbar p {
++  margin: 0;
++  line-height: 1.7;
++}
++
++.architecture-toolbar-meta {
++  display: flex;
++  gap: 8px;
++  flex-wrap: wrap;
++}
++
++.architecture-toolbar-meta span {
++  padding: 8px 11px;
++  border: 1px solid var(--line);
++  border-radius: 999px;
++  background: #fff;
++  color: #53636e;
++  font-size: 12px;
++  font-weight: 800;
++}
++
++.architecture-workspace {
++  display: grid;
++  grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
++  gap: 18px;
++  align-items: start;
++}
++
++.architecture-tree-panel,
++.architecture-detail-panel {
++  background: #fff;
++  border: 1px solid var(--line);
++  border-radius: var(--radius);
++  box-shadow: 0 8px 30px rgba(17, 42, 61, .055);
++}
++
++.architecture-tree-panel {
++  position: sticky;
++  top: 90px;
++  max-height: calc(100vh - 120px);
++  overflow: hidden;
++}
++
++.architecture-tree-head {
++  display: flex;
++  justify-content: space-between;
++  gap: 12px;
++  align-items: center;
++  padding: 18px;
++  border-bottom: 1px solid #e9eef1;
++  background: #f8fafb;
++}
++
++.architecture-tree-head > div {
++  display: grid;
++  gap: 4px;
++}
++
++.architecture-tree-head span {
++  color: var(--teal);
++  font-size: 10px;
++  font-weight: 900;
++  letter-spacing: .12em;
++}
++
++.architecture-tree-head strong {
++  color: var(--navy);
++  font-size: 16px;
++}
++
++.architecture-overview-button {
++  border: 1px solid #ccd8de;
++  border-radius: 10px;
++  padding: 8px 10px;
++  background: #fff;
++  color: #50616c;
++  font-size: 11px;
++  font-weight: 800;
++}
++
++.architecture-overview-button.active {
++  border-color: var(--teal);
++  background: #e9f4f2;
++  color: #1d675f;
++}
++
++.architecture-tree {
++  max-height: calc(100vh - 195px);
++  overflow: auto;
++  padding: 17px 16px 22px;
++}
++
++.architecture-branch-list {
++  position: relative;
++  list-style: none;
++  margin: 0;
++  padding: 0;
++}
++
++.architecture-branch-list .architecture-branch-list {
++  margin-left: 18px;
++  padding-left: 18px;
++}
++
++.architecture-branch-list .architecture-branch-list::before {
++  content: "";
++  position: absolute;
++  left: 2px;
++  top: 0;
++  bottom: 17px;
++  width: 1px;
++  background: #cfd9de;
++}
++
++.architecture-branch-item {
++  position: relative;
++  margin: 0 0 8px;
++}
++
++.architecture-branch-list .architecture-branch-list > .architecture-branch-item::before {
++  content: "";
++  position: absolute;
++  left: -16px;
++  top: 23px;
++  width: 16px;
++  height: 1px;
++  background: #cfd9de;
++}
++
++.architecture-node {
++  position: relative;
++  width: 100%;
++  display: grid;
++  grid-template-columns: 38px minmax(0, 1fr) 18px;
++  gap: 10px;
++  align-items: center;
++  border: 1px solid #d9e2e7;
++  border-radius: 13px;
++  padding: 11px;
++  background: #fff;
++  color: var(--ink);
++  text-align: left;
++  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
++}
++
++.architecture-node:hover {
++  border-color: #9eb5c1;
++  box-shadow: 0 5px 16px rgba(17, 42, 61, .08);
++}
++
++.architecture-node[data-level="0"] {
++  border-color: #c8d7df;
++  background: #f5f8fa;
++}
++
++.architecture-node.active {
++  border-color: var(--teal);
++  background: #eef7f5;
++  box-shadow: 0 0 0 3px rgba(28, 117, 107, .09);
++}
++
++.architecture-node-number {
++  display: grid;
++  place-items: center;
++  min-height: 34px;
++  border-radius: 9px;
++  background: var(--navy);
++  color: #fff;
++  font-size: 11px;
++  font-weight: 900;
++}
++
++.architecture-node[data-level="1"] .architecture-node-number,
++.architecture-node[data-level="2"] .architecture-node-number {
++  background: #dfe8ec;
++  color: var(--navy);
++}
++
++.architecture-node-copy {
++  min-width: 0;
++  display: grid;
++  gap: 4px;
++}
++
++.architecture-node-copy strong {
++  color: var(--navy);
++  font-size: 13px;
++  line-height: 1.35;
++}
++
++.architecture-node-copy small {
++  overflow: hidden;
++  color: #71808a;
++  font-size: 10px;
++  line-height: 1.45;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
++
++.architecture-node-branch,
++.architecture-node-leaf {
++  color: #91a2ab;
++  font-weight: 900;
++  text-align: center;
++}
++
++.architecture-detail-panel {
++  min-height: 620px;
++  overflow: hidden;
++}
++
++.architecture-detail-head {
++  display: flex;
++  justify-content: space-between;
++  gap: 22px;
++  align-items: flex-start;
++  padding: 28px 30px 24px;
++  border-bottom: 1px solid #e9eef1;
++  background:
++    radial-gradient(circle at 100% 0, rgba(28,117,107,.10), transparent 35%),
++    linear-gradient(135deg, #fbfcfd, #f4f7f8);
++}
++
++.architecture-detail-kicker {
++  margin-bottom: 8px;
++  color: var(--teal);
++  font-size: 10px;
++  font-weight: 900;
++  letter-spacing: .12em;
++}
++
++.architecture-detail-head h2 {
++  margin: 0 0 10px;
++  color: var(--navy);
++  font-size: clamp(24px, 3vw, 36px);
++  letter-spacing: -.035em;
++}
++
++.architecture-detail-head p {
++  max-width: 760px;
++  margin: 0;
++  color: #61717b;
++  line-height: 1.75;
++}
++
++.architecture-detail-badge {
++  flex: 0 0 auto;
++  padding: 7px 10px;
++  border: 1px solid rgba(28,117,107,.25);
++  border-radius: 999px;
++  background: #e9f4f2;
++  color: #236d64;
++  font-size: 10px;
++  font-weight: 900;
++}
++
++.architecture-parent-link {
++  width: calc(100% - 60px);
++  margin: 20px 30px 0;
++  display: flex;
++  justify-content: space-between;
++  gap: 12px;
++  align-items: center;
++  border: 1px solid #dce5e9;
++  border-radius: 12px;
++  padding: 11px 14px;
++  background: #f8fafb;
++  text-align: left;
++}
++
++.architecture-parent-link span {
++  color: #7a8992;
++  font-size: 11px;
++}
++
++.architecture-parent-link strong {
++  color: var(--navy);
++  font-size: 12px;
++}
++
++.architecture-detail-body {
++  padding: 26px 30px 30px;
++  line-height: 1.8;
++}
++
++.architecture-detail-body h2,
++.architecture-detail-body h3,
++.architecture-detail-body h4 {
++  color: var(--navy);
++}
++
++.architecture-detail-body p {
++  margin: 0 0 14px;
++}
++
++.architecture-detail-body ul,
++.architecture-detail-body ol {
++  padding-left: 22px;
++}
++
++.architecture-detail-body blockquote {
++  margin: 18px 0;
++  padding: 14px 16px;
++  border-left: 4px solid var(--gold);
++  border-radius: 0 12px 12px 0;
++  background: #fff7e8;
++}
++
++.architecture-overview-grid,
++.architecture-child-grid {
++  display: grid;
++  grid-template-columns: repeat(2, minmax(0, 1fr));
++  gap: 11px;
++}
++
++.architecture-overview-grid {
++  padding: 24px 30px 0;
++}
++
++.architecture-overview-card,
++.architecture-child-card {
++  display: grid;
++  grid-template-columns: auto minmax(0, 1fr);
++  gap: 5px 10px;
++  border: 1px solid #dbe4e8;
++  border-radius: 14px;
++  padding: 14px;
++  background: #fff;
++  text-align: left;
++}
++
++.architecture-overview-card:hover,
++.architecture-child-card:hover {
++  border-color: var(--teal);
++  background: #f4faf8;
++}
++
++.architecture-overview-card span,
++.architecture-child-card span {
++  grid-row: 1 / span 2;
++  display: grid;
++  place-items: center;
++  min-width: 38px;
++  height: 38px;
++  border-radius: 10px;
++  background: var(--navy);
++  color: #fff;
++  font-size: 11px;
++  font-weight: 900;
++}
++
++.architecture-overview-card strong,
++.architecture-child-card strong {
++  color: var(--navy);
++  font-size: 13px;
++}
++
++.architecture-overview-card small,
++.architecture-child-card small {
++  overflow: hidden;
++  color: #72818a;
++  font-size: 10px;
++  line-height: 1.45;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
++
++.architecture-child-section {
++  padding: 0 30px 30px;
++}
++
++.architecture-child-section h3 {
++  margin: 0 0 12px;
++  color: var(--navy);
++}
++
++.architecture-flow-list {
++  display: grid;
++  gap: 8px;
++  margin: 0;
++  padding-left: 0 !important;
++  list-style: none;
++  counter-reset: architecture-flow;
++}
++
++.architecture-flow-list li {
++  counter-increment: architecture-flow;
++  display: grid;
++  grid-template-columns: 34px 180px minmax(0, 1fr);
++  gap: 12px;
++  align-items: center;
++  padding: 11px 12px;
++  border: 1px solid #e1e8ec;
++  border-radius: 12px;
++  background: #fafcfd;
++}
++
++.architecture-flow-list li::before {
++  content: counter(architecture-flow, decimal-leading-zero);
++  color: var(--teal);
++  font-size: 11px;
++  font-weight: 900;
++}
++
++.architecture-flow-list strong {
++  color: var(--navy);
++  font-size: 12px;
++}
++
++.architecture-flow-list span {
++  color: #6d7b84;
++  font-size: 11px;
++}
++
++@media (max-width: 1100px) {
++  .architecture-workspace {
++    grid-template-columns: minmax(285px, 340px) minmax(0, 1fr);
++  }
++
++  .architecture-overview-grid,
++  .architecture-child-grid {
++    grid-template-columns: 1fr;
++  }
++
++  .architecture-flow-list li {
++    grid-template-columns: 30px minmax(0, 1fr);
++  }
++
++  .architecture-flow-list span {
++    grid-column: 2;
++  }
++}
++
++@media (max-width: 980px) {
++  .architecture-workspace {
++    grid-template-columns: 1fr;
++  }
++
++  .architecture-tree-panel {
++    position: static;
++    max-height: none;
++  }
++
++  .architecture-tree {
++    max-height: 52vh;
++  }
++
++  .architecture-detail-panel {
++    min-height: 0;
++    scroll-margin-top: 78px;
++  }
++}
++
++@media (max-width: 620px) {
++  .architecture-tree-head,
++  .architecture-detail-head {
++    padding-left: 18px;
++    padding-right: 18px;
++  }
++
++  .architecture-detail-head {
++    display: grid;
++    gap: 14px;
++  }
++
++  .architecture-detail-badge {
++    justify-self: start;
++  }
++
++  .architecture-overview-grid,
++  .architecture-detail-body,
++  .architecture-child-section {
++    padding-left: 18px;
++    padding-right: 18px;
++  }
++
++  .architecture-parent-link {
++    width: calc(100% - 36px);
++    margin-left: 18px;
++    margin-right: 18px;
++  }
++
++  .architecture-node-copy small {
++    white-space: normal;
++    display: -webkit-box;
++    -webkit-line-clamp: 2;
++    -webkit-box-orient: vertical;
++  }
++}

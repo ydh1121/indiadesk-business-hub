@@ -1,0 +1,502 @@
+.architecture-page-toolbar {
+  margin-bottom: 18px;
+}
+
+.architecture-page-toolbar > div:first-child {
+  max-width: 780px;
+}
+
+.architecture-page-toolbar h2 {
+  margin: 0 0 7px;
+  color: var(--navy);
+}
+
+.architecture-page-toolbar p {
+  margin: 0;
+  line-height: 1.7;
+}
+
+.architecture-toolbar-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.architecture-toolbar-meta span {
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: #53636e;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.architecture-workspace {
+  display: grid;
+  grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.architecture-tree-panel,
+.architecture-detail-panel {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 30px rgba(17, 42, 61, .055);
+}
+
+.architecture-tree-panel {
+  position: sticky;
+  top: 90px;
+  max-height: calc(100vh - 120px);
+  overflow: hidden;
+}
+
+.architecture-tree-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 18px;
+  border-bottom: 1px solid #e9eef1;
+  background: #f8fafb;
+}
+
+.architecture-tree-head > div {
+  display: grid;
+  gap: 4px;
+}
+
+.architecture-tree-head span {
+  color: var(--teal);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+.architecture-tree-head strong {
+  color: var(--navy);
+  font-size: 16px;
+}
+
+.architecture-overview-button {
+  border: 1px solid #ccd8de;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #fff;
+  color: #50616c;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.architecture-overview-button.active {
+  border-color: var(--teal);
+  background: #e9f4f2;
+  color: #1d675f;
+}
+
+.architecture-tree {
+  max-height: calc(100vh - 195px);
+  overflow: auto;
+  padding: 17px 16px 22px;
+}
+
+.architecture-branch-list {
+  position: relative;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.architecture-branch-list .architecture-branch-list {
+  margin-left: 18px;
+  padding-left: 18px;
+}
+
+.architecture-branch-list .architecture-branch-list::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0;
+  bottom: 17px;
+  width: 1px;
+  background: #cfd9de;
+}
+
+.architecture-branch-item {
+  position: relative;
+  margin: 0 0 8px;
+}
+
+.architecture-branch-list .architecture-branch-list > .architecture-branch-item::before {
+  content: "";
+  position: absolute;
+  left: -16px;
+  top: 23px;
+  width: 16px;
+  height: 1px;
+  background: #cfd9de;
+}
+
+.architecture-node {
+  position: relative;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 18px;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #d9e2e7;
+  border-radius: 13px;
+  padding: 11px;
+  background: #fff;
+  color: var(--ink);
+  text-align: left;
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+
+.architecture-node:hover {
+  border-color: #9eb5c1;
+  box-shadow: 0 5px 16px rgba(17, 42, 61, .08);
+}
+
+.architecture-node[data-level="0"] {
+  border-color: #c8d7df;
+  background: #f5f8fa;
+}
+
+.architecture-node.active {
+  border-color: var(--teal);
+  background: #eef7f5;
+  box-shadow: 0 0 0 3px rgba(28, 117, 107, .09);
+}
+
+.architecture-node-number {
+  display: grid;
+  place-items: center;
+  min-height: 34px;
+  border-radius: 9px;
+  background: var(--navy);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.architecture-node[data-level="1"] .architecture-node-number,
+.architecture-node[data-level="2"] .architecture-node-number {
+  background: #dfe8ec;
+  color: var(--navy);
+}
+
+.architecture-node-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.architecture-node-copy strong {
+  color: var(--navy);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.architecture-node-copy small {
+  overflow: hidden;
+  color: #71808a;
+  font-size: 10px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.architecture-node-branch,
+.architecture-node-leaf {
+  color: #91a2ab;
+  font-weight: 900;
+  text-align: center;
+}
+
+.architecture-detail-panel {
+  min-height: 620px;
+  overflow: hidden;
+}
+
+.architecture-detail-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 22px;
+  align-items: flex-start;
+  padding: 28px 30px 24px;
+  border-bottom: 1px solid #e9eef1;
+  background:
+    radial-gradient(circle at 100% 0, rgba(28,117,107,.10), transparent 35%),
+    linear-gradient(135deg, #fbfcfd, #f4f7f8);
+}
+
+.architecture-detail-kicker {
+  margin-bottom: 8px;
+  color: var(--teal);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+.architecture-detail-head h2 {
+  margin: 0 0 10px;
+  color: var(--navy);
+  font-size: clamp(24px, 3vw, 36px);
+  letter-spacing: -.035em;
+}
+
+.architecture-detail-head p {
+  max-width: 760px;
+  margin: 0;
+  color: #61717b;
+  line-height: 1.75;
+}
+
+.architecture-detail-badge {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border: 1px solid rgba(28,117,107,.25);
+  border-radius: 999px;
+  background: #e9f4f2;
+  color: #236d64;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.architecture-parent-link {
+  width: calc(100% - 60px);
+  margin: 20px 30px 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #dce5e9;
+  border-radius: 12px;
+  padding: 11px 14px;
+  background: #f8fafb;
+  text-align: left;
+}
+
+.architecture-parent-link span {
+  color: #7a8992;
+  font-size: 11px;
+}
+
+.architecture-parent-link strong {
+  color: var(--navy);
+  font-size: 12px;
+}
+
+.architecture-detail-body {
+  padding: 26px 30px 30px;
+  line-height: 1.8;
+}
+
+.architecture-detail-body h2,
+.architecture-detail-body h3,
+.architecture-detail-body h4 {
+  color: var(--navy);
+}
+
+.architecture-detail-body p {
+  margin: 0 0 14px;
+}
+
+.architecture-detail-body ul,
+.architecture-detail-body ol {
+  padding-left: 22px;
+}
+
+.architecture-detail-body blockquote {
+  margin: 18px 0;
+  padding: 14px 16px;
+  border-left: 4px solid var(--gold);
+  border-radius: 0 12px 12px 0;
+  background: #fff7e8;
+}
+
+.architecture-overview-grid,
+.architecture-child-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.architecture-overview-grid {
+  padding: 24px 30px 0;
+}
+
+.architecture-overview-card,
+.architecture-child-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 5px 10px;
+  border: 1px solid #dbe4e8;
+  border-radius: 14px;
+  padding: 14px;
+  background: #fff;
+  text-align: left;
+}
+
+.architecture-overview-card:hover,
+.architecture-child-card:hover {
+  border-color: var(--teal);
+  background: #f4faf8;
+}
+
+.architecture-overview-card span,
+.architecture-child-card span {
+  grid-row: 1 / span 2;
+  display: grid;
+  place-items: center;
+  min-width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--navy);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.architecture-overview-card strong,
+.architecture-child-card strong {
+  color: var(--navy);
+  font-size: 13px;
+}
+
+.architecture-overview-card small,
+.architecture-child-card small {
+  overflow: hidden;
+  color: #72818a;
+  font-size: 10px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.architecture-child-section {
+  padding: 0 30px 30px;
+}
+
+.architecture-child-section h3 {
+  margin: 0 0 12px;
+  color: var(--navy);
+}
+
+.architecture-flow-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 0 !important;
+  list-style: none;
+  counter-reset: architecture-flow;
+}
+
+.architecture-flow-list li {
+  counter-increment: architecture-flow;
+  display: grid;
+  grid-template-columns: 34px 180px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid #e1e8ec;
+  border-radius: 12px;
+  background: #fafcfd;
+}
+
+.architecture-flow-list li::before {
+  content: counter(architecture-flow, decimal-leading-zero);
+  color: var(--teal);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.architecture-flow-list strong {
+  color: var(--navy);
+  font-size: 12px;
+}
+
+.architecture-flow-list span {
+  color: #6d7b84;
+  font-size: 11px;
+}
+
+@media (max-width: 1100px) {
+  .architecture-workspace {
+    grid-template-columns: minmax(285px, 340px) minmax(0, 1fr);
+  }
+
+  .architecture-overview-grid,
+  .architecture-child-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .architecture-flow-list li {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+
+  .architecture-flow-list span {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 980px) {
+  .architecture-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .architecture-tree-panel {
+    position: static;
+    max-height: none;
+  }
+
+  .architecture-tree {
+    max-height: 52vh;
+  }
+
+  .architecture-detail-panel {
+    min-height: 0;
+    scroll-margin-top: 78px;
+  }
+}
+
+@media (max-width: 620px) {
+  .architecture-tree-head,
+  .architecture-detail-head {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .architecture-detail-head {
+    display: grid;
+    gap: 14px;
+  }
+
+  .architecture-detail-badge {
+    justify-self: start;
+  }
+
+  .architecture-overview-grid,
+  .architecture-detail-body,
+  .architecture-child-section {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .architecture-parent-link {
+    width: calc(100% - 36px);
+    margin-left: 18px;
+    margin-right: 18px;
+  }
+
+  .architecture-node-copy small {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+}
