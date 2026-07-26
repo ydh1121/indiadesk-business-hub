@@ -1,5 +1,6 @@
 import { renderMarkdownSafe, escapeHtml } from './markdown.js';
 
+import { renderArchitectureWorkspace, activateArchitectureNode } from './architecture-ui.js';
 const DEFAULT_PLAN_TABS = [
   { pageKey: 'v1', label: 'Version 1 · 기본사업' },
   { pageKey: 'v2', label: 'Version 2 · 통합사업' },
@@ -202,11 +203,10 @@ async function renderArchitecture() {
     state.architecture = data.items || [];
   }
 
-  const sections = state.architecture.length
-    ? state.architecture.map((item) => `<article class="content-card"><div class="content-card-head"><div><div class="eyebrow">STEP ${escapeHtml(item.number)}</div><h3>${escapeHtml(item.title)}</h3></div></div><div class="content-card-body"><p>${escapeHtml(item.description)}</p></div></article>`).join('')
-    : '<div class="empty-state">현재 계정에 공개된 통합 아키텍처 단계가 없습니다.</div>';
-
-  $('#content').innerHTML = `${hero()}<div class="page-toolbar"><h2>Full Funnel 아키텍처</h2></div><div class="section-list">${sections}</div>`;
+  $('#content').innerHTML = renderArchitectureWorkspace(
+    state.architecture,
+    hero(),
+  );
 }
 
 async function renderDocuments() {
@@ -355,6 +355,7 @@ window.addEventListener('click', async (event) => {
   const target = event.target.closest('button,a'); if (!target) return;
   if (target.dataset.view) { event.preventDefault(); return navigate(target.dataset.view); }
   if (target.dataset.version) { state.version = target.dataset.version; return renderPlans(); }
+  if (target.dataset.architectureNode) return activateArchitectureNode(target.dataset.architectureNode);
   if (target.dataset.closeModal !== undefined) return closeModal();
   if (target.dataset.editContent) return openContentEditor(target.dataset.editContent);
   if (target.dataset.accountEdit) return openAccountEditor(target.dataset.accountEdit);
