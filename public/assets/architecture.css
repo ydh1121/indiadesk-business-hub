@@ -724,6 +724,112 @@
   color: var(--teal);
 }
 
+
+
+.architecture-reader-nav {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+  margin: 8px 31px 31px;
+  padding: 10px;
+  border: 1px solid #dce6e9;
+  border-radius: 18px;
+  background: rgba(248, 251, 252, .96);
+}
+
+.architecture-reader-button {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  padding: 10px 11px;
+  background: #fff;
+  color: var(--navy);
+  text-align: left;
+  transition: border-color .16s ease, background .16s ease, transform .16s ease;
+}
+
+.architecture-reader-button.next {
+  grid-template-columns: minmax(0, 1fr) 26px;
+  text-align: right;
+}
+
+.architecture-reader-button.next .architecture-reader-arrow {
+  grid-column: 2;
+}
+
+.architecture-reader-button.next .architecture-reader-copy {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.architecture-reader-button:hover:not(:disabled) {
+  border-color: rgba(28, 117, 107, .34);
+  background: #f2f8f7;
+  transform: translateY(-1px);
+}
+
+.architecture-reader-button:disabled {
+  opacity: .42;
+  cursor: default;
+}
+
+.architecture-reader-arrow {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: #eaf2f3;
+  color: var(--teal);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.architecture-reader-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.architecture-reader-copy small {
+  color: #84949c;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.architecture-reader-copy strong {
+  overflow: hidden;
+  color: var(--navy);
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.architecture-reader-progress {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  color: #82929a;
+}
+
+.architecture-reader-progress strong {
+  color: var(--navy);
+  font-size: 14px;
+}
+
+.architecture-reader-progress span,
+.architecture-reader-progress small {
+  font-size: 10px;
+}
+
 @media (max-width: 1120px) {
   .architecture-workspace {
     grid-template-columns: minmax(290px, 335px) minmax(0, 1fr);
@@ -744,9 +850,45 @@
     max-height: none;
   }
 
+
   .architecture-tree {
-    max-height: 54vh;
+    max-height: none;
+    overflow: visible;
+    overscroll-behavior: auto;
+    touch-action: pan-y;
   }
+
+  .architecture-tree-panel {
+    overflow: visible;
+  }
+
+  .architecture-detail-panel {
+    padding-bottom: 104px;
+  }
+
+  .architecture-reader-nav {
+    position: fixed;
+    z-index: 80;
+    left: 12px;
+    right: 12px;
+    bottom: calc(64px + env(safe-area-inset-bottom));
+    margin: 0;
+    padding: 8px;
+    border-color: rgba(168, 188, 196, .78);
+    background: rgba(246, 250, 251, .96);
+    box-shadow: 0 12px 34px rgba(10, 35, 51, .18);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  .architecture-reader-button {
+    padding: 8px;
+  }
+
+  .architecture-reader-copy strong {
+    max-width: 29vw;
+  }
+
 
   .architecture-detail-panel {
     min-height: 0;
@@ -833,6 +975,35 @@
   .architecture-roadmap-number {
     width: 48px;
     height: 48px;
+  }
+
+  .architecture-reader-nav {
+    left: 8px;
+    right: 8px;
+    gap: 6px;
+  }
+
+  .architecture-reader-progress {
+    min-width: 42px;
+  }
+
+  .architecture-reader-button {
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .architecture-reader-button.next {
+    grid-template-columns: minmax(0, 1fr) 22px;
+  }
+
+  .architecture-reader-arrow {
+    width: 22px;
+    height: 22px;
+  }
+
+  .architecture-reader-copy strong {
+    max-width: 27vw;
+    font-size: 10px;
   }
 
   .architecture-roadmap-copy small,

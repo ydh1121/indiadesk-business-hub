@@ -286,6 +286,8 @@ function overviewDetail(items) {
         `).join('')}
       </ol>
     </div>
+
+    ${readerNavigation(OVERVIEW_KEY)}
   `;
 }
 
@@ -366,6 +368,73 @@ function itemDetail(item, items) {
         </div>
       </section>
     ` : ''}
+  `;
+}
+
+
+function linearItems() {
+  return [...currentItems].sort(
+    (a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, 'ko'),
+  );
+}
+
+function adjacentItems(key) {
+  const items = linearItems();
+
+  if (key === OVERVIEW_KEY) {
+    return {
+      previous: null,
+      next: items[0] || null,
+      index: 0,
+      total: items.length,
+    };
+  }
+
+  const index = items.findIndex((item) => item.key === key);
+
+  return {
+    previous: index > 0 ? items[index - 1] : null,
+    next: index >= 0 && index < items.length - 1 ? items[index + 1] : null,
+    index: index >= 0 ? index + 1 : 0,
+    total: items.length,
+  };
+}
+
+function readerButton(item, direction) {
+  const disabled = !item;
+  const label = direction === 'previous' ? '이전 구조' : '다음 구조';
+  const arrow = direction === 'previous' ? '←' : '→';
+
+  return `
+    <button
+      type="button"
+      class="architecture-reader-button ${direction}"
+      ${disabled ? 'disabled' : `data-architecture-node="${escapeHtml(item.key)}"`}
+    >
+      <span class="architecture-reader-arrow" aria-hidden="true">${arrow}</span>
+      <span class="architecture-reader-copy">
+        <small>${label}</small>
+        <strong>${disabled ? '없음' : escapeHtml(item.title)}</strong>
+      </span>
+    </button>
+  `;
+}
+
+function readerNavigation(key) {
+  const adjacent = adjacentItems(key);
+
+  return `
+    <nav class="architecture-reader-nav" aria-label="이전 구조와 다음 구조">
+      ${readerButton(adjacent.previous, 'previous')}
+
+      <div class="architecture-reader-progress" aria-label="현재 구조 순서">
+        <strong>${adjacent.index}</strong>
+        <span>/</span>
+        <small>${adjacent.total}</small>
+      </div>
+
+      ${readerButton(adjacent.next, 'next')}
+    </nav>
   `;
 }
 
@@ -497,6 +566,9 @@ export function activateArchitectureNode(key) {
   if (detail) detail.innerHTML = detailHtml(key);
 
   if (window.matchMedia('(max-width: 980px)').matches && detail) {
-    detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const topbar = document.querySelector('.topbar');
+    const offset = (topbar?.getBoundingClientRect().height || 0) + 10;
+    const top = window.scrollY + detail.getBoundingClientRect().top - offset;
+    window.scrollTo({ top: Math.max(0, top), behavior: 'auto' });
   }
 }

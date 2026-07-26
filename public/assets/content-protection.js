@@ -3,6 +3,7 @@ const EDITABLE_SELECTOR = 'input, textarea, select, [contenteditable="true"], [d
 
 let shieldTimer = null;
 let watermarkTimer = null;
+const securityEventCooldown = new Map();
 
 function protectedRoot() {
   return document.querySelector(PROTECTED_ROOT_SELECTOR);
@@ -15,6 +16,63 @@ function isProtectedVisible() {
 
 function isEditableTarget(target) {
   return target instanceof Element && Boolean(target.closest(EDITABLE_SELECTOR));
+}
+
+function currentSecurityContext() {
+  const selectedArchitecture = document.querySelector(
+    '.architecture-node[aria-selected="true"], [data-architecture-node][aria-current="page"]',
+  );
+
+  return {
+    view: document.querySelector('#viewTitle')?.textContent?.trim() || '',
+    architectureKey: selectedArchitecture?.dataset.architectureNode || '',
+    path: `${location.pathname}${location.search}`.slice(0, 300),
+    screen: `${screen.width}x${screen.height}`,
+    visibility: document.visibilityState,
+  };
+}
+
+function logSecurityEvent(eventType, reason) {
+  if (!isProtectedVisible()) return;
+
+  const now = Date.now();
+  const last = securityEventCooldown.get(eventType) || 0;
+  if (now - last < 4000) return;
+  securityEventCooldown.set(eventType, now);
+
+  const userAgent = navigator.userAgent;
+  const category = /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent)
+    ? 'mobile'
+    : 'pc';
+  let os = 'Unknown';
+  if (/Windows/i.test(userAgent)) os = 'Windows';
+  else if (/Android/i.test(userAgent)) os = 'Android';
+  else if (/iPhone|iPad|iPod/i.test(userAgent)) os = 'iOS/iPadOS';
+  else if (/Mac OS X/i.test(userAgent)) os = 'macOS';
+  else if (/Linux/i.test(userAgent)) os = 'Linux';
+
+  let browser = 'Other';
+  if (/Edg\//.test(userAgent)) browser = 'Edge';
+  else if (/Chrome\//.test(userAgent)) browser = 'Chrome';
+  else if (/Safari\//.test(userAgent)) browser = 'Safari';
+  else if (/Firefox\//.test(userAgent)) browser = 'Firefox';
+
+  const payload = {
+    eventType,
+    reason,
+    category,
+    os,
+    browser,
+    ...currentSecurityContext(),
+  };
+
+  fetch('/api/security-events', {
+    method: 'POST',
+    credentials: 'same-origin',
+    keepalive: true,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).catch(() => {});
 }
 
 function ensureProtectionLayer() {
@@ -110,6 +168,10 @@ function handleKeydown(event) {
   if (event.key === 'PrintScreen') {
     event.preventDefault();
     activateShield(1800);
+    logSecurityEvent(
+      'CAPTURE_PRINTSCREEN',
+      'PrintScreen 키 입력이 감지되었습니다. 실제 캡처 저장 여부는 브라우저에서 확인할 수 없습니다.',
+    );
 
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText('Protected content').catch(() => {});
@@ -128,6 +190,14 @@ function handleKeydown(event) {
 
   event.preventDefault();
   activateShield(700);
+
+  if (key === 'p') {
+    logSecurityEvent('CAPTURE_PRINT', '인쇄 또는 PDF 저장 단축키 입력이 차단되었습니다.');
+  } else if (key === 's') {
+    logSecurityEvent('CONTENT_SAVE_BLOCKED', '페이지 저장 단축키 입력이 차단되었습니다.');
+  } else if (key === 'c' || key === 'x') {
+    logSecurityEvent('CONTENT_COPY_BLOCKED', '보호 콘텐츠 복사 또는 잘라내기 입력이 차단되었습니다.');
+  }
 }
 
 function initializeObservers() {
@@ -165,7 +235,14 @@ function initializeContentProtection() {
 
   window.addEventListener('blur', () => activateShield(0));
   window.addEventListener('focus', () => window.setTimeout(deactivateShield, 180));
-  window.addEventListener('beforeprint', () => activateShield(0));
+
+  window.addEventListener('beforeprint', () => {
+    activateShield(0);
+    logSecurityEvent(
+      'CAPTURE_PRINT',
+      '브라우저 인쇄 또는 PDF 저장 화면 진입이 감지되었습니다.',
+    );
+  });
   window.addEventListener('afterprint', deactivateShield);
 
   document.addEventListener('visibilitychange', () => {
