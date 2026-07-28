@@ -1,0 +1,96 @@
+.content-card-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.section-note-button {
+  min-width: 72px;
+}
+
+.section-note-button.note-has-content {
+  border-color: rgba(28, 117, 107, .35);
+  background: #edf7f5;
+  color: #1d6b62;
+}
+
+.section-note-context {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 16px;
+  padding: 13px 14px;
+  border: 1px solid #dce6e9;
+  border-radius: 13px;
+  background: #f7fafb;
+}
+
+.section-note-context span {
+  color: var(--teal);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+
+.section-note-context strong {
+  color: var(--navy);
+  font-size: 14px;
+}
+
+#sectionNoteForm textarea {
+  min-height: 230px;
+  resize: vertical;
+  line-height: 1.65;
+}
+
+.notes-admin-table {
+  min-width: 980px;
+}
+
+.notes-admin-table th:nth-child(1) {
+  width: 150px;
+}
+
+.notes-admin-table th:nth-child(2) {
+  width: 100px;
+}
+
+.notes-admin-table th:nth-child(3) {
+  width: 70px;
+}
+
+.notes-admin-table th:nth-child(4) {
+  width: 210px;
+}
+
+.notes-admin-table th:nth-child(6) {
+  width: 80px;
+}
+
+.admin-note-text {
+  min-width: 320px;
+  max-width: 620px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.55;
+}
+
+@media (max-width: 720px) {
+  .content-card-head {
+    align-items: flex-start;
+  }
+
+  .content-card-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .section-note-button {
+    min-width: 86px;
+  }
+
+  #sectionNoteForm textarea {
+    min-height: 200px;
+  }
+}

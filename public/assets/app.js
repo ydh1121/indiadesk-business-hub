@@ -1,10 +1,11 @@
 import { renderMarkdownSafe, escapeHtml } from './markdown.js';
-
 import { renderArchitectureWorkspace, activateArchitectureNode } from './architecture-ui.js';
+
 const DEFAULT_PLAN_TABS = [
   { pageKey: 'v1', label: 'Version 1 · 기본사업' },
   { pageKey: 'v2', label: 'Version 2 · 통합사업' },
   { pageKey: 'v3', label: 'Version 3 · 실행 오더 데스크' },
+  { pageKey: 'v4', label: 'Version 4 · 기업 진출 패키지' },
 ];
 
 const state = {
@@ -19,6 +20,8 @@ const state = {
   access: { initialized: false, allowed: new Set() },
   accessLoaded: false,
   architecture: [],
+  notes: [],
+  notesLoaded: false,
   admin: {},
 };
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -67,6 +70,8 @@ function showLogin() {
   state.contents = [];
   state.documents = [];
   state.architecture = [];
+  state.notes = [];
+  state.notesLoaded = false;
 }
 function showApp() {
   $('#loginPage').classList.add('hidden'); $('#app').classList.remove('hidden');
@@ -79,11 +84,20 @@ function showApp() {
 }
 
 function hero() {
-  return `<section class="hero"><div class="brand-kicker">Integrated Business Workspace</div><h2>인도진출 파트너·시장검증·거래 플랫폼</h2><p>IBS 현지교육을 기반으로 한국 영업망을 구축하고, Indiadesk 멀티피드에서 기업을 유입한 뒤 시장검증·IBS 실행·Ctrl Shift Trade 거래로 전환합니다.</p><div class="metric-grid"><div class="metric-card"><strong>20명</strong><span>1기 영업 파트너</span></div><div class="metric-card"><strong>4억 원</strong><span>1기 교육매출</span></div><div class="metric-card"><strong>0원</strong><span>1기 계획 잔여</span></div><div class="metric-card"><strong>10기</strong><span>누적 확장계획</span></div></div></section>`;
+  if (state.view === 'plans' && state.version === 'v4') {
+    return `<section class="hero"><div class="brand-kicker">Corporate India Entry Package</div><h2>기업 인도진출 실행 패키지</h2><p>사전 진단과 문서 정비부터 바이어·파트너 후보 선별, IBS 현지 미팅, 시장·유통 확인과 귀국 후 실행계획까지 한 과정으로 관리합니다.</p><div class="metric-grid"><div class="metric-card"><strong>2,000만 원</strong><span>기업당 기본가격</span></div><div class="metric-card"><strong>6박 7일</strong><span>인도 현지일정</span></div><div class="metric-card"><strong>최대 10개</strong><span>사전 후보군 기준</span></div><div class="metric-card"><strong>30·60·90일</strong><span>후속 실행계획</span></div></div></section>`;
+  }
+
+  return `<section class="hero"><div class="brand-kicker">Integrated Business Workspace</div><h2>인도진출 파트너·시장검증·거래 플랫폼</h2><p>IBS 현지교육을 기반으로 한국 영업망을 구축하고, Indiadesk 멀티피드에서 기업을 유입한 뒤 시장검증·IBS 실행·Ctrl Shift Trade 거래로 전환합니다.</p><div class="metric-grid"><div class="metric-card"><strong>20명</strong><span>1기 영업 파트너</span></div><div class="metric-card"><strong>4억 원</strong><span>1기 교육매출</span></div><div class="metric-card"><strong>0원</strong><span>기존 30일안 잔여</span></div><div class="metric-card"><strong>10기</strong><span>누적 확장계획</span></div></div></section>`;
 }
 
 async function loadContents() { const data = await api('/api/content'); state.contents = data.items || []; }
 async function loadDocuments() { const data = await api('/api/documents'); state.documents = data.items || []; }
+async function loadNotes() {
+  const data = await api('/api/notes');
+  state.notes = data.items || [];
+  state.notesLoaded = true;
+}
 async function loadSettings() {
   const data = await api('/api/settings');
   state.settings = data.settings || {};
@@ -161,12 +175,33 @@ function getPlanTabs() {
 }
 
 function contentCard(item) {
-  const edit = state.me.role === 'admin' ? `<button class="ghost edit-btn" data-edit-content="${escapeHtml(item.pageKey)}|${escapeHtml(item.sectionKey)}">내용 수정</button>` : '';
-  return `<article class="content-card"><div class="content-card-head"><div><div class="eyebrow">${escapeHtml(item.pageKey.toUpperCase())} · ${String(item.sortOrder).padStart(2,'0')}</div><h3>${escapeHtml(item.title)}</h3></div>${edit}</div><div class="content-card-body">${renderMarkdownSafe(item.bodyMarkdown)}</div></article>`;
+  const actions = [];
+  if (state.me.role === 'admin') {
+    actions.push(`<button class="ghost edit-btn" data-edit-content="${escapeHtml(item.pageKey)}|${escapeHtml(item.sectionKey)}">내용 수정</button>`);
+  } else {
+    const note = state.notes.find(
+      (candidate) =>
+        candidate.pageKey === item.pageKey &&
+        candidate.sectionKey === item.sectionKey,
+    );
+    const noteLabel = note?.noteText ? '메모 있음' : '메모';
+    actions.push(`<button class="ghost section-note-button ${note?.noteText ? 'note-has-content' : ''}" data-section-note="${escapeHtml(item.pageKey)}|${escapeHtml(item.sectionKey)}">${noteLabel}</button>`);
+  }
+
+  return `<article class="content-card" data-content-section="${escapeHtml(item.pageKey)}|${escapeHtml(item.sectionKey)}"><div class="content-card-head"><div><div class="eyebrow">${escapeHtml(item.pageKey.toUpperCase())} · ${String(item.sortOrder).padStart(2,'0')}</div><h3>${escapeHtml(item.title)}</h3></div><div class="content-card-actions">${actions.join('')}</div></div><div class="content-card-body">${renderMarkdownSafe(item.bodyMarkdown)}</div></article>`;
 }
 
 async function renderPlans() {
   if (!state.contents.length) await loadContents();
+
+  if (state.me.role !== 'admin' && !state.notesLoaded) {
+    try {
+      await loadNotes();
+    } catch (error) {
+      state.notesLoaded = true;
+      console.warn('파트 메모를 불러오지 못했습니다.', error);
+    }
+  }
 
   if (!state.settingsLoaded) {
     try {
@@ -222,15 +257,32 @@ async function renderDocuments() {
 
 async function renderAdmin() {
   if (state.me.role !== 'admin') return navigate('plans');
-  const [accounts, devices, logs] = await Promise.all([api('/api/admin/accounts'), api('/api/admin/devices'), api('/api/admin/logs')]);
-  state.admin = { accounts: accounts.items || [], devices: devices.items || [], logs: logs.items || [] };
+  const [accounts, devices, logs, notes] = await Promise.all([
+    api('/api/admin/accounts'),
+    api('/api/admin/devices'),
+    api('/api/admin/logs'),
+    api('/api/admin/notes'),
+  ]);
+  state.admin = {
+    accounts: accounts.items || [],
+    devices: devices.items || [],
+    logs: logs.items || [],
+    notes: notes.items || [],
+  };
   const accountRows = state.admin.accounts.map((a) => {
     const permissionButton = a.role === 'admin' ? '' : `<button class="ghost" data-account-permissions="${escapeHtml(a.username)}">공개 범위</button>`;
     return `<tr><td><span class="status-dot ${escapeHtml(a.status)}"></span>${escapeHtml(a.username)}</td><td>${escapeHtml(a.displayName)}</td><td>${escapeHtml(a.role)}</td><td>${escapeHtml(a.status)}</td><td>${escapeHtml(a.devicePolicy)}</td><td>${a.pcLimit}</td><td>${a.mobileLimit}</td><td><div class="inline-actions"><button class="secondary" data-account-edit="${escapeHtml(a.username)}">설정</button><button class="ghost" data-account-password="${escapeHtml(a.username)}">비밀번호</button>${permissionButton}</div></td></tr>`;
   }).join('');
   const deviceRows = state.admin.devices.slice().reverse().slice(0,200).map((d) => `<tr><td>${escapeHtml(d.username)}</td><td>${escapeHtml(d.category)}</td><td>${escapeHtml(d.os)}</td><td>${escapeHtml(d.browser)}</td><td>${escapeHtml(d.country)} ${escapeHtml(d.city)}</td><td>${escapeHtml(d.lastIp)}</td><td>${escapeHtml(d.lastSeen)}</td><td>${d.active?'활성':'해제'}</td><td><button class="${d.active?'danger':'secondary'}" data-device-toggle="${escapeHtml(d.deviceId)}" data-device-active="${d.active}">${d.active?'해제':'활성화'}</button></td></tr>`).join('');
   const logRows = state.admin.logs.slice().reverse().slice(0,200).map((l) => `<tr><td>${escapeHtml(l.timestamp)}</td><td>${escapeHtml(l.username)}</td><td>${escapeHtml(l.event)}</td><td>${l.success?'성공':'실패'}</td><td>${escapeHtml(l.reason)}</td><td>${escapeHtml(l.ip)}</td><td>${escapeHtml(l.country)} ${escapeHtml(l.city)}</td><td>${escapeHtml(l.category)} · ${escapeHtml(l.os)}</td></tr>`).join('');
-  $('#content').innerHTML = `<div class="page-toolbar"><div><h2>관리자</h2><p class="muted">계정·기기·접속기록과 콘텐츠·문서 메타데이터를 관리합니다.</p></div></div><div class="admin-grid"><section class="admin-card"><h3>계정</h3><div class="table-wrap"><table class="admin-table"><thead><tr><th>계정</th><th>표시명</th><th>역할</th><th>상태</th><th>초과정책</th><th>PC</th><th>모바일</th><th>관리</th></tr></thead><tbody>${accountRows}</tbody></table></div></section><section class="admin-card"><h3>등록 기기</h3><div class="table-wrap"><table class="admin-table"><thead><tr><th>계정</th><th>분류</th><th>OS</th><th>브라우저</th><th>국가·도시</th><th>최근 IP</th><th>최근 접속</th><th>상태</th><th>관리</th></tr></thead><tbody>${deviceRows}</tbody></table></div></section><section class="admin-card"><h3>접속 로그</h3><div class="table-wrap"><table class="admin-table"><thead><tr><th>시간</th><th>계정</th><th>이벤트</th><th>결과</th><th>사유</th><th>IP</th><th>국가·도시</th><th>기기</th></tr></thead><tbody>${logRows}</tbody></table></div></section></div>`;
+  const noteRows = state.admin.notes
+    .slice()
+    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
+    .slice(0, 500)
+    .map((note) => `<tr><td>${escapeHtml(note.updatedAt)}</td><td>${escapeHtml(note.username)}</td><td>${escapeHtml(note.pageKey.toUpperCase())}</td><td>${escapeHtml(note.sectionTitle || note.sectionKey)}</td><td><div class="admin-note-text">${escapeHtml(note.noteText)}</div></td><td>${note.status === 'reviewed' ? '검토 완료' : '검토 전'}</td></tr>`)
+    .join('');
+  const noteEmpty = '<tr><td colspan="6" class="muted">등록된 파트 메모가 없습니다.</td></tr>';
+  $('#content').innerHTML = `<div class="page-toolbar"><div><h2>관리자</h2><p class="muted">계정·기기·접속기록, 콘텐츠와 게스트의 파트별 메모를 관리합니다.</p></div></div><div class="admin-grid"><section class="admin-card"><h3>계정</h3><div class="table-wrap"><table class="admin-table"><thead><tr><th>계정</th><th>표시명</th><th>역할</th><th>상태</th><th>초과정책</th><th>PC</th><th>모바일</th><th>관리</th></tr></thead><tbody>${accountRows}</tbody></table></div></section><section class="admin-card"><h3>파트별 메모</h3><p class="small muted">게스트가 사업계획서 각 파트에 남긴 아이디어입니다.</p><div class="table-wrap"><table class="admin-table notes-admin-table"><thead><tr><th>수정시간</th><th>계정</th><th>버전</th><th>파트</th><th>메모</th><th>상태</th></tr></thead><tbody>${noteRows || noteEmpty}</tbody></table></div></section><section class="admin-card"><h3>등록 기기</h3><div class="table-wrap"><table class="admin-table"><thead><tr><th>계정</th><th>분류</th><th>OS</th><th>브라우저</th><th>국가·도시</th><th>최근 IP</th><th>최근 접속</th><th>상태</th><th>관리</th></tr></thead><tbody>${deviceRows}</tbody></table></div></section><section class="admin-card"><h3>접속 로그</h3><div class="table-wrap"><table class="admin-table"><thead><tr><th>시간</th><th>계정</th><th>이벤트</th><th>결과</th><th>사유</th><th>IP</th><th>국가·도시</th><th>기기</th></tr></thead><tbody>${logRows}</tbody></table></div></section></div>`;
 }
 
 async function navigate(view) {
@@ -262,6 +314,39 @@ function modal(title, body, actions = '') {
   $('#modalRoot').innerHTML = `<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h3>${escapeHtml(title)}</h3><button class="icon-button" data-close-modal>×</button></div>${body}<div class="modal-actions">${actions}</div></div></div>`;
 }
 function closeModal() { $('#modalRoot').innerHTML = ''; }
+
+function openSectionNoteEditor(key) {
+  const [pageKey, sectionKey] = key.split('|');
+  const item = state.contents.find(
+    (candidate) =>
+      candidate.pageKey === pageKey &&
+      candidate.sectionKey === sectionKey,
+  );
+  if (!item) return;
+
+  const note = state.notes.find(
+    (candidate) =>
+      candidate.pageKey === pageKey &&
+      candidate.sectionKey === sectionKey,
+  );
+
+  modal(
+    '파트 메모',
+    `<form id="sectionNoteForm"><input type="hidden" name="pageKey" value="${escapeHtml(pageKey)}"><input type="hidden" name="sectionKey" value="${escapeHtml(sectionKey)}"><div class="section-note-context"><span>${escapeHtml(pageKey.toUpperCase())}</span><strong>${escapeHtml(item.title)}</strong></div><div class="field"><label>아이디어·수정 의견</label><textarea name="noteText" maxlength="5000" required placeholder="이 파트에서 추가하거나 수정할 아이디어를 작성하세요.">${escapeHtml(note?.noteText || '')}</textarea></div><p class="small muted">작성한 메모는 관리자 화면의 ‘파트별 메모’에서 확인할 수 있습니다.</p></form>`,
+    '<button class="ghost" data-close-modal>취소</button><button class="primary" data-save-section-note>메모 저장</button>',
+  );
+  $('#sectionNoteForm textarea')?.focus();
+}
+
+function updateSectionNoteButton(note) {
+  const key = `${note.pageKey}|${note.sectionKey}`;
+  const button = $$('[data-section-note]').find(
+    (candidate) => candidate.dataset.sectionNote === key,
+  );
+  if (!button) return;
+  button.textContent = '메모 있음';
+  button.classList.add('note-has-content');
+}
 
 function openContentEditor(key) {
   const [pageKey, sectionKey] = key.split('|');
@@ -358,6 +443,7 @@ window.addEventListener('click', async (event) => {
   if (target.dataset.architectureNode) return activateArchitectureNode(target.dataset.architectureNode);
   if (target.dataset.closeModal !== undefined) return closeModal();
   if (target.dataset.editContent) return openContentEditor(target.dataset.editContent);
+  if (target.dataset.sectionNote) return openSectionNoteEditor(target.dataset.sectionNote);
   if (target.dataset.accountEdit) return openAccountEditor(target.dataset.accountEdit);
   if (target.dataset.accountPassword) return openPasswordEditor(target.dataset.accountPassword);
   if (target.dataset.accountPermissions) return openPermissionsEditor(target.dataset.accountPermissions);
@@ -377,6 +463,25 @@ window.addEventListener('click', async (event) => {
   if (target.id === 'initializeContent') {
     if (!confirm('기본 내용을 Google Sheets Content 탭에 초기화합니다. 기존 동일 섹션은 유지됩니다.')) return;
     await api('/api/admin/initialize-content', { method:'POST', body:'{}' }); state.contents=[]; toast('기본 내용이 초기화되었습니다.'); return renderPlans();
+  }
+  if (target.dataset.saveSectionNote !== undefined) {
+    const payload = Object.fromEntries(new FormData($('#sectionNoteForm')));
+    const data = await api('/api/notes', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+    const saved = data.item;
+    const index = state.notes.findIndex(
+      (note) =>
+        note.pageKey === saved.pageKey &&
+        note.sectionKey === saved.sectionKey,
+    );
+    if (index >= 0) state.notes[index] = saved;
+    else state.notes.push(saved);
+    closeModal();
+    updateSectionNoteButton(saved);
+    toast('파트 메모를 저장했습니다.');
+    return;
   }
   if (target.dataset.saveContent !== undefined) {
     const form = new FormData($('#contentEditForm'));
