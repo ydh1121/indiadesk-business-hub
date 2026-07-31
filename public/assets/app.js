@@ -282,7 +282,7 @@ async function renderAdmin() {
     .map((note) => `<tr><td>${escapeHtml(note.updatedAt)}</td><td>${escapeHtml(note.username)}</td><td>${escapeHtml(note.pageKey.toUpperCase())}</td><td>${escapeHtml(note.sectionTitle || note.sectionKey)}</td><td><div class="admin-note-text">${escapeHtml(note.noteText)}</div></td><td>${note.status === 'reviewed' ? '검토 완료' : '검토 전'}</td></tr>`)
     .join('');
   const noteEmpty = '<tr><td colspan="6" class="muted">등록된 파트 메모가 없습니다.</td></tr>';
-  $('#content').innerHTML = `<div class="page-toolbar"><div><h2>관리자</h2><p class="muted">계정·기기·접속기록, 콘텐츠와 게스트의 파트별 메모를 관리합니다.</p></div></div><div class="admin-grid"><section class="admin-card"><h3>계정</h3><div class="table-wrap"><table class="admin-table"><thead><tr><th>계정</th><th>표시명</th><th>역할</th><th>상태</th><th>초과정책</th><th>PC</th><th>모바일</th><th>관리</th></tr></thead><tbody>${accountRows}</tbody></table></div></section><section class="admin-card"><h3>파트별 메모</h3><p class="small muted">게스트가 사업계획서 각 파트에 남긴 아이디어입니다.</p><div class="table-wrap"><table class="admin-table notes-admin-table"><thead><tr><th>수정시간</th><th>계정</th><th>버전</th><th>파트</th><th>메모</th><th>상태</th></tr></thead><tbody>${noteRows || noteEmpty}</tbody></table></div></section><section class="admin-card"><h3>등록 기기</h3><div class="table-wrap"><table class="admin-table"><thead><tr><th>계정</th><th>분류</th><th>OS</th><th>브라우저</th><th>국가·도시</th><th>최근 IP</th><th>최근 접속</th><th>상태</th><th>관리</th></tr></thead><tbody>${deviceRows}</tbody></table></div></section><section class="admin-card"><h3>접속 로그</h3><div class="table-wrap"><table class="admin-table"><thead><tr><th>시간</th><th>계정</th><th>이벤트</th><th>결과</th><th>사유</th><th>IP</th><th>국가·도시</th><th>기기</th></tr></thead><tbody>${logRows}</tbody></table></div></section></div>`;
+  $('#content').innerHTML = `<div class="page-toolbar"><div><h2>관리자</h2><p class="muted">계정·기기·접속기록, 콘텐츠와 게스트의 파트별 메모를 관리합니다.</p></div><button class="primary" data-create-account>신규 유저 추가</button></div><div class="admin-grid"><section class="admin-card"><h3>계정</h3><div class="table-wrap"><table class="admin-table"><thead><tr><th>계정</th><th>표시명</th><th>역할</th><th>상태</th><th>초과정책</th><th>PC</th><th>모바일</th><th>관리</th></tr></thead><tbody>${accountRows}</tbody></table></div></section><section class="admin-card"><h3>파트별 메모</h3><p class="small muted">게스트가 사업계획서 각 파트에 남긴 아이디어입니다.</p><div class="table-wrap"><table class="admin-table notes-admin-table"><thead><tr><th>수정시간</th><th>계정</th><th>버전</th><th>파트</th><th>메모</th><th>상태</th></tr></thead><tbody>${noteRows || noteEmpty}</tbody></table></div></section><section class="admin-card"><h3>등록 기기</h3><div class="table-wrap"><table class="admin-table"><thead><tr><th>계정</th><th>분류</th><th>OS</th><th>브라우저</th><th>국가·도시</th><th>최근 IP</th><th>최근 접속</th><th>상태</th><th>관리</th></tr></thead><tbody>${deviceRows}</tbody></table></div></section><section class="admin-card"><h3>접속 로그</h3><div class="table-wrap"><table class="admin-table"><thead><tr><th>시간</th><th>계정</th><th>이벤트</th><th>결과</th><th>사유</th><th>IP</th><th>국가·도시</th><th>기기</th></tr></thead><tbody>${logRows}</tbody></table></div></section></div>`;
 }
 
 async function navigate(view) {
@@ -352,6 +352,15 @@ function openContentEditor(key) {
   const [pageKey, sectionKey] = key.split('|');
   const item = state.contents.find((x) => x.pageKey === pageKey && x.sectionKey === sectionKey);
   modal('내용 수정', `<form id="contentEditForm"><input type="hidden" name="pageKey" value="${escapeHtml(pageKey)}"><input type="hidden" name="sectionKey" value="${escapeHtml(sectionKey)}"><div class="field"><label>제목</label><input name="title" value="${escapeHtml(item.title)}" required></div><div class="field"><label>본문 · Markdown</label><textarea name="bodyMarkdown" required>${escapeHtml(item.bodyMarkdown)}</textarea></div><div class="field"><label>정렬</label><input name="sortOrder" type="number" value="${item.sortOrder}"></div></form>`, '<button class="ghost" data-close-modal>취소</button><button class="primary" data-save-content>저장</button>');
+}
+
+function openCreateAccountEditor() {
+  modal(
+    '신규 유저 추가',
+    `<form id="accountCreateForm"><div class="field"><label>계정명</label><input name="username" minlength="3" maxlength="32" pattern="[a-z0-9][a-z0-9._-]{2,31}" autocomplete="off" placeholder="영문 소문자·숫자·점·밑줄·하이픈" required></div><div class="field"><label>표시명</label><input name="displayName" maxlength="50" required></div><div class="field"><label>초기 비밀번호</label><input type="password" name="password" minlength="10" autocomplete="new-password" required></div><div class="field"><label>초기 비밀번호 확인</label><input type="password" name="confirm" minlength="10" autocomplete="new-password" required></div><div class="field"><label>상태</label><select name="status"><option value="active" selected>active · 즉시 로그인 허용</option><option value="pending">pending · 로그인 대기</option></select></div><div class="field"><label>새 기기 초과 시</label><select name="devicePolicy"><option value="BLOCK" selected>BLOCK · 로그인 차단</option><option value="REPLACE">REPLACE · 기존기기 해제 후 허용</option><option value="ALLOW">ALLOW · 제한 초과 허용</option></select></div><div class="field"><label>PC 제한</label><input type="number" name="pcLimit" min="0" max="10" value="1"></div><div class="field"><label>모바일 제한</label><input type="number" name="mobileLimit" min="0" max="10" value="1"></div><div class="success-box">신규 계정은 게스트로 생성되며, 공개 범위를 지정하기 전까지 모든 메뉴가 비공개입니다.</div></form>`,
+    '<button class="ghost" data-close-modal>취소</button><button class="primary" data-save-new-account>계정 생성</button>',
+  );
+  $('#accountCreateForm input[name="username"]')?.focus();
 }
 
 function openAccountEditor(username) {
@@ -444,6 +453,7 @@ window.addEventListener('click', async (event) => {
   if (target.dataset.closeModal !== undefined) return closeModal();
   if (target.dataset.editContent) return openContentEditor(target.dataset.editContent);
   if (target.dataset.sectionNote) return openSectionNoteEditor(target.dataset.sectionNote);
+  if (target.dataset.createAccount !== undefined) return openCreateAccountEditor();
   if (target.dataset.accountEdit) return openAccountEditor(target.dataset.accountEdit);
   if (target.dataset.accountPassword) return openPasswordEditor(target.dataset.accountPassword);
   if (target.dataset.accountPermissions) return openPermissionsEditor(target.dataset.accountPermissions);
@@ -487,13 +497,45 @@ window.addEventListener('click', async (event) => {
     const form = new FormData($('#contentEditForm'));
     await api('/api/content', {method:'PUT', body:JSON.stringify(Object.fromEntries(form))}); closeModal(); state.contents=[]; toast('내용을 저장했습니다.'); return renderPlans();
   }
+  if (target.dataset.saveNewAccount !== undefined) {
+    const form = $('#accountCreateForm');
+    if (!form.reportValidity()) return;
+    const payload = Object.fromEntries(new FormData(form));
+    if (payload.password !== payload.confirm) return alert('비밀번호가 일치하지 않습니다.');
+    payload.username = String(payload.username || '').trim().toLowerCase();
+    payload.pcLimit = Number(payload.pcLimit);
+    payload.mobileLimit = Number(payload.mobileLimit);
+    delete payload.confirm;
+    try {
+      const data = await api('/api/admin/accounts', { method: 'POST', body: JSON.stringify(payload) });
+      closeModal();
+      toast('신규 유저를 생성했습니다. 공개 범위를 지정하세요.');
+      await renderAdmin();
+      return openPermissionsEditor(data.item.username);
+    } catch (error) {
+      alert(error.message);
+      return;
+    }
+  }
   if (target.dataset.saveAccount !== undefined) {
     const payload=Object.fromEntries(new FormData($('#accountEditForm'))); payload.pcLimit=Number(payload.pcLimit); payload.mobileLimit=Number(payload.mobileLimit);
-    await api('/api/admin/accounts',{method:'PUT',body:JSON.stringify(payload)}); closeModal(); toast('계정 설정을 저장했습니다.'); return renderAdmin();
+    try {
+      await api('/api/admin/accounts',{method:'PUT',body:JSON.stringify(payload)}); closeModal(); toast('계정 설정을 저장했습니다.'); return renderAdmin();
+    } catch (error) {
+      alert(error.message);
+      return;
+    }
   }
   if (target.dataset.savePassword !== undefined) {
-    const payload=Object.fromEntries(new FormData($('#passwordEditForm'))); if(payload.password!==payload.confirm) return alert('비밀번호가 일치하지 않습니다.');
-    await api('/api/admin/accounts',{method:'PUT',body:JSON.stringify({username:payload.username,password:payload.password,status:'active'})}); closeModal(); toast('비밀번호를 설정했습니다.'); return renderAdmin();
+    const form = $('#passwordEditForm');
+    if (!form.reportValidity()) return;
+    const payload=Object.fromEntries(new FormData(form)); if(payload.password!==payload.confirm) return alert('비밀번호가 일치하지 않습니다.');
+    try {
+      await api('/api/admin/accounts',{method:'PUT',body:JSON.stringify({username:payload.username,password:payload.password,status:'active'})}); closeModal(); toast('비밀번호를 설정했습니다.'); return renderAdmin();
+    } catch (error) {
+      alert(error.message);
+      return;
+    }
   }
   if (target.dataset.savePermissions !== undefined) {
     const form = $('#permissionsForm');
